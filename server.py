@@ -28,6 +28,7 @@ from backend.llm import try_extract_with_llm
 from backend.store import Database
 from backend.transcription import (
     TranscriptionNotConfigured,
+    engine_name as transcription_engine,
     is_configured as transcription_is_configured,
     transcribe_audio,
 )
@@ -104,6 +105,7 @@ class ShilingHandler(BaseHTTPRequestHandler):
                         "guided-auto-mode",
                     ],
                     "transcriptionConfigured": transcription_is_configured(),
+                    "transcriptionEngine": transcription_engine(),
                 },
             )
             return

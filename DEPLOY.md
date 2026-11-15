@@ -14,6 +14,8 @@
 | `SHILING_LLM_API_KEY` | 否 | 模型 API Key |
 | `OPENAI_API_KEY` | 录音转写必填 | OpenAI Audio API Key |
 | `OPENAI_TRANSCRIBE_MODEL` | 否 | 默认 `gpt-4o-transcribe-diarize` |
+| `SHILING_LOCAL_WHISPER_MODEL` | 否 | 本地模型名，默认 `small` |
+| `SHILING_WHISPER_MODEL_DIR` | 否 | 本地模型目录，默认 `D:\软件\whisper_models` |
 
 ## 启动命令
 

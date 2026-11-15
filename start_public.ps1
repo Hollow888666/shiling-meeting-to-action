@@ -66,7 +66,7 @@ if (-not $tunnel -or -not $state.publicUrl) {
             "-o", "ExitOnForwardFailure=yes",
             "-o", "ServerAliveInterval=30",
             "-R", "80:127.0.0.1:$publicPort",
-            "nokey@localhost.run"
+            "serveo.net"
         ) `
         -WorkingDirectory $root `
         -WindowStyle Hidden `
@@ -84,7 +84,10 @@ if (-not $tunnel -or -not $state.publicUrl) {
         if (Test-Path -LiteralPath $errLog) {
             $text += Get-Content -LiteralPath $errLog -Raw -ErrorAction SilentlyContinue
         }
-        $match = [regex]::Match($text, "https://[a-z0-9]+\.app\.lhr\.life")
+        $match = [regex]::Match(
+            $text,
+            "https://[a-z0-9-]+\.serveousercontent\.com"
+        )
         if ($match.Success) {
             $publicUrl = $match.Value
             break

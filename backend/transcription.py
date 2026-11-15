@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import os
+import tempfile
+import threading
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -11,7 +14,28 @@ class TranscriptionNotConfigured(RuntimeError):
 
 
 def is_configured() -> bool:
-    return bool(os.getenv("OPENAI_API_KEY", "").strip())
+    return bool(os.getenv("OPENAI_API_KEY", "").strip()) or local_is_available()
+
+
+def local_is_available() -> bool:
+    try:
+        import faster_whisper  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
+def engine_name() -> str:
+    if os.getenv("OPENAI_API_KEY", "").strip():
+        return "openai-audio"
+    if local_is_available():
+        return "local-faster-whisper"
+    return "none"
+
+
+_local_model = None
+_local_model_lock = threading.Lock()
 
 
 def transcribe_audio(
@@ -24,9 +48,7 @@ def transcribe_audio(
 ) -> dict[str, Any]:
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
-        raise TranscriptionNotConfigured(
-            "录音转写尚未配置。请在本机设置 OPENAI_API_KEY 后重启后端。"
-        )
+        return transcribe_audio_local(filename, content, language=language)
 
     model = os.getenv(
         "OPENAI_TRANSCRIBE_MODEL",
@@ -47,21 +69,18 @@ def transcribe_audio(
     if language:
         data["language"] = language
 
-    response = requests.post(
-        "https://api.openai.com/v1/audio/transcriptions",
-        headers={"Authorization": f"Bearer {api_key}"},
-        files=files,
-        data=data,
-        timeout=180,
-    )
+    try:
+        response = requests.post(
+            "https://api.openai.com/v1/audio/transcriptions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            files=files,
+            data=data,
+            timeout=180,
+        )
+    except requests.RequestException:
+        return transcribe_audio_local(filename, content, language=language)
     if not response.ok:
-        message = "录音转写服务返回错误。"
-        try:
-            payload = response.json()
-            message = payload.get("error", {}).get("message") or message
-        except ValueError:
-            pass
-        raise RuntimeError(message)
+        return transcribe_audio_local(filename, content, language=language)
 
     payload = response.json()
     segments = payload.get("segments") or []
@@ -96,3 +115,93 @@ def transcribe_audio(
         "segments": normalized_segments,
         "charCount": len(text),
     }
+
+
+def transcribe_audio_local(
+    filename: str,
+    content: bytes,
+    *,
+    language: str = "zh",
+) -> dict[str, Any]:
+    if not local_is_available():
+        raise TranscriptionNotConfigured(
+            "录音转写尚未配置。请设置 OPENAI_API_KEY，或安装 faster-whisper。"
+        )
+    try:
+        from faster_whisper import WhisperModel
+    except ImportError as error:
+        raise TranscriptionNotConfigured(
+            "录音转写尚未配置。请设置 OPENAI_API_KEY，或安装 faster-whisper。"
+        ) from error
+
+    model_name = os.getenv("SHILING_LOCAL_WHISPER_MODEL", "small").strip()
+    model_dir = os.getenv(
+        "SHILING_WHISPER_MODEL_DIR",
+        r"D:\软件\whisper_models",
+    ).strip()
+    with _local_model_lock:
+        global _local_model
+        if _local_model is None:
+            _local_model = WhisperModel(
+                model_name,
+                device="cpu",
+                compute_type="int8",
+                download_root=model_dir,
+            )
+        model = _local_model
+
+    suffix = Path(filename).suffix or ".audio"
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp:
+            temp.write(content)
+            temp_path = temp.name
+        segments_iter, info = model.transcribe(
+            temp_path,
+            language=language or "zh",
+            vad_filter=True,
+            beam_size=5,
+        )
+        segments = []
+        for segment in segments_iter:
+            text = str(segment.text or "").strip()
+            if not text:
+                continue
+            segments.append(
+                {
+                    "speaker": "发言人",
+                    "start": round(float(segment.start), 2),
+                    "end": round(float(segment.end), 2),
+                    "text": text,
+                }
+            )
+        text = "\n".join(
+            f"[{format_timestamp(segment['start'])}] {segment['text']}"
+            for segment in segments
+        )
+        if not text:
+            raise RuntimeError("本地 Whisper 没有识别到可用语音。")
+        return {
+            "filename": filename,
+            "model": f"local:faster-whisper-{model_name}",
+            "text": text,
+            "segments": segments,
+            "charCount": len(text),
+            "language": getattr(info, "language", language),
+            "diarized": False,
+        }
+    finally:
+        if temp_path:
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+
+
+def format_timestamp(seconds: float) -> str:
+    seconds = max(0, int(float(seconds)))
+    minutes, second = divmod(seconds, 60)
+    hour, minute = divmod(minutes, 60)
+    if hour:
+        return f"{hour:02d}:{minute:02d}:{second:02d}"
+    return f"{minute:02d}:{second:02d}"

@@ -175,7 +175,7 @@ SHILING_LLM_API_KEY=your-api-key
 
 ## 录音转写
 
-设置 `OPENAI_API_KEY` 后重启后端，AI 自动模式会上传录音到 OpenAI Audio API。默认使用 `gpt-4o-transcribe-diarize` 并生成说话人分段。
+有 `OPENAI_API_KEY` 时，后端优先使用 OpenAI Audio API，默认使用 `gpt-4o-transcribe-diarize` 并生成说话人分段。
 
 ```text
 OPENAI_API_KEY=your-api-key
@@ -183,6 +183,15 @@ OPENAI_TRANSCRIBE_MODEL=gpt-4o-transcribe-diarize
 ```
 
 没有配置 Key 时，系统会在 AI 自动模式中明确提示，不会静默丢弃录音。
+
+没有 Key 时，后端会自动使用本机 `faster-whisper`：
+
+```text
+SHILING_LOCAL_WHISPER_MODEL=small
+SHILING_WHISPER_MODEL_DIR=D:\软件\whisper_models
+```
+
+本地模式默认输出时间戳和纯文本转写，不提供说话人分离。模型只需下载一次，音频不会离开本机。
 
 ## 路演一句话
 
