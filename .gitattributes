@@ -1,0 +1,3 @@
+shiling_mobile.html linguist-generated=true linguist-documentation=true
+vendor/** linguist-vendored
+docs/assets/** linguist-documentation
