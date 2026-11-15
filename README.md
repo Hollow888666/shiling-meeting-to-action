@@ -31,6 +31,8 @@
 - 完全离线运行，原文不上传。
 - HTTP 服务模式下自动连接 Python 后端，使用 SQLite 持久化。
 - 后端保留会议历史，支持切换旧会议和新建会议。
+- 任务评论、审计日志、负责人负载分析、逾期统计和服务端搜索。
+- 支持可选 OpenAI Chat Completions 兼容模型，提取失败时自动回退本地规则。
 
 ## 启动
 
@@ -86,9 +88,14 @@ SQLite 数据文件位于 `data/shiling.db`。
 | GET | `/api/health` | 健康检查 |
 | GET | `/api/state` | 获取当前会议、任务、决策和风险 |
 | GET | `/api/meetings` | 获取会议历史 |
+| GET | `/api/analytics` | 获取任务、负责人、逾期和风险统计 |
+| GET | `/api/activity?limit=50` | 获取审计日志 |
+| GET | `/api/search?q=知识库` | 服务端搜索任务、决策和风险 |
 | POST | `/api/meetings/extract` | 提取会议并写入数据库 |
 | POST | `/api/meetings/{id}/activate` | 切换当前会议 |
 | POST | `/api/tasks` | 新建任务 |
+| GET | `/api/tasks/{id}/comments` | 获取任务评论 |
+| POST | `/api/tasks/{id}/comments` | 新增任务评论 |
 | PUT | `/api/tasks/{id}` | 更新任务 |
 | DELETE | `/api/tasks/{id}` | 删除任务 |
 | POST | `/api/reset` | 恢复演示数据 |
@@ -133,6 +140,16 @@ D:\Python\python.exe tests\standalone_check.py
 ```
 
 在线模式优先使用后端数据；如果后端断开，前端自动退回本机存储，保留演示能力。
+
+## 可选 LLM 提取
+
+后端默认使用本地语义规则。设置以下环境变量后，会优先调用兼容 OpenAI Chat Completions 的模型；调用失败或返回格式无效时自动回退本地规则：
+
+```text
+SHILING_LLM_BASE_URL=https://your-provider.example/v1
+SHILING_LLM_MODEL=your-model
+SHILING_LLM_API_KEY=your-api-key
+```
 
 ## 路演一句话
 

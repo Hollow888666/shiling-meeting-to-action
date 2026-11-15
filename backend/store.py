@@ -4,7 +4,7 @@ import json
 import sqlite3
 import uuid
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -79,9 +79,30 @@ class Database:
                     value TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS activities (
+                    id TEXT PRIMARY KEY,
+                    meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+                    event_type TEXT NOT NULL,
+                    entity_type TEXT NOT NULL,
+                    entity_id TEXT NOT NULL DEFAULT '',
+                    message TEXT NOT NULL,
+                    detail_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS comments (
+                    id TEXT PRIMARY KEY,
+                    task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+                    author TEXT NOT NULL DEFAULT '',
+                    body TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_tasks_meeting ON tasks(meeting_id);
                 CREATE INDEX IF NOT EXISTS idx_decisions_meeting ON decisions(meeting_id);
                 CREATE INDEX IF NOT EXISTS idx_risks_meeting ON risks(meeting_id);
+                CREATE INDEX IF NOT EXISTS idx_activities_meeting ON activities(meeting_id);
+                CREATE INDEX IF NOT EXISTS idx_comments_task ON comments(task_id);
                 """
             )
 
@@ -215,6 +236,19 @@ class Database:
                 """,
                 (meeting_id,),
             )
+            self._log_activity(
+                connection,
+                meeting_id,
+                "meeting.extracted",
+                "meeting",
+                meeting_id,
+                f"导入会议：{meeting.get('title') or '新建会议'}",
+                {
+                    "tasks": len(state.get("tasks", [])),
+                    "decisions": len(state.get("decisions", [])),
+                    "risks": len(state.get("risks", [])),
+                },
+            )
         return self.get_state()
 
     def list_meetings(self) -> dict[str, Any]:
@@ -262,6 +296,14 @@ class Database:
                 """,
                 (meeting_id,),
             )
+            self._log_activity(
+                connection,
+                meeting_id,
+                "meeting.activated",
+                "meeting",
+                meeting_id,
+                "切换当前会议",
+            )
         return self.get_state(meeting_id)
 
     def _insert_task(
@@ -304,6 +346,14 @@ class Database:
         with self.connection() as connection:
             self._insert_task(connection, meeting_id, task)
             self._touch_meeting(connection, meeting_id)
+            self._log_activity(
+                connection,
+                meeting_id,
+                "task.created",
+                "task",
+                task["id"],
+                f"新建任务：{task['title']}",
+            )
         return task
 
     def update_task(self, task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -348,6 +398,16 @@ class Database:
                 ),
             )
             self._touch_meeting(connection, row["meeting_id"])
+            changed = [key for key in payload if key in merged and payload[key] != self._task_row(row).get(key)]
+            self._log_activity(
+                connection,
+                row["meeting_id"],
+                "task.updated",
+                "task",
+                task_id,
+                f"更新任务：{merged['title']}",
+                {"fields": changed, "status": merged["status"]},
+            )
         return merged
 
     def delete_task(self, task_id: str) -> None:
@@ -357,17 +417,243 @@ class Database:
             ).fetchone()
             if row is None:
                 raise KeyError(task_id)
+            title = connection.execute(
+                "SELECT title FROM tasks WHERE id = ?", (task_id,)
+            ).fetchone()["title"]
             connection.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
             self._touch_meeting(connection, row["meeting_id"])
+            self._log_activity(
+                connection,
+                row["meeting_id"],
+                "task.deleted",
+                "task",
+                task_id,
+                f"删除任务：{title}",
+            )
 
     def reset_demo(self) -> dict[str, Any]:
         return self.replace_state(DEMO_STATE, preserve_history=False)
+
+    def list_activity(self, limit: int = 50) -> dict[str, Any]:
+        meeting_id = self.current_meeting_id()
+        limit = max(1, min(int(limit), 200))
+        with self.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM activities
+                WHERE meeting_id = ?
+                ORDER BY created_at DESC, rowid DESC
+                LIMIT ?
+                """,
+                (meeting_id, limit),
+            ).fetchall()
+        return {
+            "meetingId": meeting_id,
+            "activities": [
+                {
+                    "id": row["id"],
+                    "type": row["event_type"],
+                    "entityType": row["entity_type"],
+                    "entityId": row["entity_id"],
+                    "message": row["message"],
+                    "detail": json.loads(row["detail_json"] or "{}"),
+                    "createdAt": row["created_at"],
+                }
+                for row in rows
+            ],
+        }
+
+    def add_comment(
+        self, task_id: str, author: str, body: str
+    ) -> dict[str, Any]:
+        body = body.strip()
+        if not body:
+            raise ValueError("Comment body is required.")
+        with self.connection() as connection:
+            task = connection.execute(
+                "SELECT meeting_id, title FROM tasks WHERE id = ?", (task_id,)
+            ).fetchone()
+            if task is None:
+                raise KeyError(task_id)
+            comment = {
+                "id": f"c_{uuid.uuid4().hex[:12]}",
+                "taskId": task_id,
+                "author": (author or "匿名").strip(),
+                "body": body,
+                "createdAt": datetime.now().isoformat(timespec="seconds"),
+            }
+            connection.execute(
+                """
+                INSERT INTO comments(id, task_id, author, body, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    comment["id"],
+                    task_id,
+                    comment["author"],
+                    comment["body"],
+                    comment["createdAt"],
+                ),
+            )
+            self._touch_meeting(connection, task["meeting_id"])
+            self._log_activity(
+                connection,
+                task["meeting_id"],
+                "comment.added",
+                "task",
+                task_id,
+                f"{comment['author']} 评论：{task['title']}",
+                {"commentId": comment["id"]},
+            )
+        return comment
+
+    def list_comments(self, task_id: str) -> dict[str, Any]:
+        with self.connection() as connection:
+            task = connection.execute(
+                "SELECT id FROM tasks WHERE id = ?", (task_id,)
+            ).fetchone()
+            if task is None:
+                raise KeyError(task_id)
+            rows = connection.execute(
+                """
+                SELECT * FROM comments
+                WHERE task_id = ?
+                ORDER BY created_at, rowid
+                """,
+                (task_id,),
+            ).fetchall()
+        return {
+            "taskId": task_id,
+            "comments": [dict(row) for row in rows],
+        }
+
+    def analytics(self) -> dict[str, Any]:
+        state = self.get_state()
+        tasks = state["tasks"]
+        today = date.today()
+        soon = today + timedelta(days=3)
+
+        def parse_date(value: str) -> date | None:
+            try:
+                return date.fromisoformat(value)
+            except (TypeError, ValueError):
+                return None
+
+        status = {"backlog": 0, "todo": 0, "doing": 0, "done": 0}
+        priority = {"high": 0, "medium": 0, "low": 0}
+        owners: dict[str, dict[str, Any]] = {}
+        overdue = 0
+        due_soon = 0
+        for task in tasks:
+            status[task["status"]] = status.get(task["status"], 0) + 1
+            priority[task["priority"]] = priority.get(task["priority"], 0) + 1
+            due = parse_date(task["due"])
+            is_active = task["status"] != "done"
+            if is_active and due and due < today:
+                overdue += 1
+            if is_active and due and today <= due <= soon:
+                due_soon += 1
+            owner = task["owner"] or "待分配"
+            bucket = owners.setdefault(
+                owner,
+                {"owner": owner, "total": 0, "active": 0, "done": 0, "highPriority": 0},
+            )
+            bucket["total"] += 1
+            if task["status"] == "done":
+                bucket["done"] += 1
+            else:
+                bucket["active"] += 1
+            if task["priority"] == "high" and task["status"] != "done":
+                bucket["highPriority"] += 1
+
+        with self.connection() as connection:
+            comment_count = connection.execute(
+                """
+                SELECT COUNT(*) FROM comments c
+                JOIN tasks t ON t.id = c.task_id
+                WHERE t.meeting_id = ?
+                """,
+                (state["meeting"]["id"],),
+            ).fetchone()[0]
+        total = len(tasks)
+        return {
+            "meetingId": state["meeting"]["id"],
+            "totalTasks": total,
+            "completionRate": round((status["done"] / total) * 100, 1) if total else 0,
+            "status": status,
+            "priority": priority,
+            "overdue": overdue,
+            "dueSoon": due_soon,
+            "owners": sorted(
+                owners.values(),
+                key=lambda item: (-item["active"], item["owner"]),
+            ),
+            "decisions": len(state["decisions"]),
+            "risks": {
+                "total": len(state["risks"]),
+                "high": sum(1 for risk in state["risks"] if risk["severity"] == "high"),
+            },
+            "comments": comment_count,
+        }
+
+    def search(self, query: str, limit: int = 50) -> dict[str, Any]:
+        query = query.strip().lower()
+        if not query:
+            return {"query": query, "tasks": [], "decisions": [], "risks": []}
+        state = self.get_state()
+        tasks = [
+            task
+            for task in state["tasks"]
+            if query in f"{task['title']} {task['owner']} {task['notes']}".lower()
+        ][:limit]
+        decisions = [
+            item for item in state["decisions"] if query in f"{item['text']} {item['source']}".lower()
+        ][:limit]
+        risks = [
+            item for item in state["risks"] if query in f"{item['title']} {item['source']}".lower()
+        ][:limit]
+        return {
+            "query": query,
+            "tasks": tasks,
+            "decisions": decisions,
+            "risks": risks,
+        }
 
     @staticmethod
     def _touch_meeting(connection: sqlite3.Connection, meeting_id: str) -> None:
         connection.execute(
             "UPDATE meetings SET updated_at = ? WHERE id = ?",
             (datetime.now().strftime("%m月%d日 %H:%M"), meeting_id),
+        )
+
+    @staticmethod
+    def _log_activity(
+        connection: sqlite3.Connection,
+        meeting_id: str,
+        event_type: str,
+        entity_type: str,
+        entity_id: str,
+        message: str,
+        detail: dict[str, Any] | None = None,
+    ) -> None:
+        connection.execute(
+            """
+            INSERT INTO activities(
+                id, meeting_id, event_type, entity_type, entity_id,
+                message, detail_json, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                f"a_{uuid.uuid4().hex[:12]}",
+                meeting_id,
+                event_type,
+                entity_type,
+                entity_id or "",
+                message,
+                json.dumps(detail or {}, ensure_ascii=False),
+                datetime.now().isoformat(timespec="seconds"),
+            ),
         )
 
     @staticmethod

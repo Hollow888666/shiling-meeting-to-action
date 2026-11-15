@@ -7,6 +7,7 @@ import mimetypes
 import os
 import re
 import socket
+import time
 from http import HTTPStatus
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -14,12 +15,15 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 from backend.extraction import extract_meeting
+from backend.llm import is_configured as llm_is_configured
+from backend.llm import try_extract_with_llm
 from backend.store import Database
 
 
 ROOT = Path(__file__).resolve().parent
 DATABASE = Database(ROOT / "data" / "shiling.db")
 ACCESS_CODE = os.getenv("SHILING_ACCESS_CODE", "").strip()
+STARTED_AT = time.time()
 
 STATIC_EXTENSIONS = {
     ".html",
@@ -66,8 +70,21 @@ class ShilingHandler(BaseHTTPRequestHandler):
                 {
                     "ok": True,
                     "service": "shiling-api",
-                    "engine": "local-semantic-rules",
+                    "engine": "hybrid-semantic-llm"
+                    if llm_is_configured()
+                    else "local-semantic-rules",
                     "database": "sqlite",
+                    "version": "0.2.0",
+                    "uptimeSeconds": int(time.time() - STARTED_AT),
+                    "features": [
+                        "meeting-history",
+                        "task-comments",
+                        "activity-audit",
+                        "analytics",
+                        "server-search",
+                        "access-code",
+                        "optional-llm",
+                    ],
                 },
             )
             return
@@ -76,6 +93,25 @@ class ShilingHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/meetings":
             self._json(HTTPStatus.OK, DATABASE.list_meetings())
+            return
+        if path == "/api/analytics":
+            self._json(HTTPStatus.OK, DATABASE.analytics())
+            return
+        if path == "/api/activity":
+            try:
+                limit = int((query.get("limit") or ["50"])[0])
+            except ValueError:
+                limit = 50
+            self._json(HTTPStatus.OK, DATABASE.list_activity(limit))
+            return
+        if path == "/api/search":
+            search_query = (query.get("q") or [""])[0]
+            self._json(HTTPStatus.OK, DATABASE.search(search_query))
+            return
+        comment_match = re.fullmatch(r"/api/tasks/([^/]+)/comments", path)
+        if comment_match:
+            task_id = unquote(comment_match.group(1))
+            self._json(HTTPStatus.OK, DATABASE.list_comments(task_id))
             return
         if path == "/api/export/json":
             self._json(HTTPStatus.OK, DATABASE.get_state())
@@ -95,12 +131,21 @@ class ShilingHandler(BaseHTTPRequestHandler):
                 transcript = str(payload.get("transcript") or "").strip()
                 if len(transcript) < 30:
                     raise ValueError("Meeting transcript is too short.")
-                extracted = extract_meeting(transcript)
+                local_extracted = extract_meeting(transcript)
+                extracted = (
+                    try_extract_with_llm(transcript, local_extracted)
+                    or local_extracted
+                )
+                engine = (
+                    "hybrid-semantic-llm"
+                    if extracted is not local_extracted
+                    else "local-semantic-rules"
+                )
                 state = DATABASE.replace_state(extracted, preserve_history=True)
                 self._json(
                     HTTPStatus.CREATED,
                     {
-                        "engine": "local-semantic-rules",
+                        "engine": engine,
                         "state": state,
                     },
                 )
@@ -108,6 +153,16 @@ class ShilingHandler(BaseHTTPRequestHandler):
             if path == "/api/tasks":
                 task = DATABASE.create_task(payload)
                 self._json(HTTPStatus.CREATED, {"task": task})
+                return
+            comment_match = re.fullmatch(r"/api/tasks/([^/]+)/comments", path)
+            if comment_match:
+                task_id = unquote(comment_match.group(1))
+                comment = DATABASE.add_comment(
+                    task_id,
+                    str(payload.get("author") or ""),
+                    str(payload.get("body") or ""),
+                )
+                self._json(HTTPStatus.CREATED, {"comment": comment})
                 return
             activate_match = re.fullmatch(r"/api/meetings/([^/]+)/activate", path)
             if activate_match:

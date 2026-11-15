@@ -24,6 +24,23 @@ def main():
         database = Database(Path(directory) / "test.db")
         state = database.get_state()
         assert len(state["tasks"]) == 5
+        analytics = database.analytics()
+        assert analytics["totalTasks"] == 5
+        assert analytics["status"]["done"] == 0
+        assert analytics["owners"]
+
+        comment = database.add_comment(
+            state["tasks"][0]["id"], "测试用户", "请补充验收标准。"
+        )
+        assert comment["body"] == "请补充验收标准。"
+        comments = database.list_comments(state["tasks"][0]["id"])
+        assert len(comments["comments"]) == 1
+        activities = database.list_activity(20)["activities"]
+        assert any(item["type"] == "comment.added" for item in activities)
+
+        search_result = database.search("知识库")
+        assert len(search_result["tasks"]) >= 1
+
         created = database.create_task(
             {
                 "title": "验证数据库任务",
