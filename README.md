@@ -168,3 +168,5 @@ SHILING_LLM_API_KEY=your-api-key
 - 贡献指南：[CONTRIBUTING.md](CONTRIBUTING.md)
 - 安全策略：[SECURITY.md](SECURITY.md)
 - GitHub 发布说明：[GITHUB_PUBLISH.md](GITHUB_PUBLISH.md)
+
+> GitHub 语言占比不统计内联构建产物 `shiling_mobile.html`，按真实前后端源码计算。
