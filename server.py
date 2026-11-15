@@ -88,7 +88,7 @@ class ShilingHandler(BaseHTTPRequestHandler):
                     if llm_is_configured()
                     else "local-semantic-rules",
                     "database": "sqlite",
-                    "version": "0.3.0",
+                    "version": "0.3.1",
                     "uptimeSeconds": int(time.time() - STARTED_AT),
                     "features": [
                         "meeting-history",
