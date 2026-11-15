@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="icon" href="data:,">
+  <title>拾令 · 会议任务闭环</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="主导航">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <div>
+          <strong>拾令</strong>
+          <small>MEETING TO ACTION</small>
+        </div>
+      </div>
+
+      <nav class="primary-nav">
+        <button class="nav-item is-active" type="button" data-view="board">
+          <i data-lucide="layout-dashboard" aria-hidden="true"></i>
+          <span>任务看板</span>
+          <span class="nav-count" id="nav-task-count">0</span>
+        </button>
+        <button class="nav-item" type="button" data-view="meeting">
+          <i data-lucide="file-text" aria-hidden="true"></i>
+          <span>会议记录</span>
+        </button>
+        <button class="nav-item" type="button" data-view="risks">
+          <i data-lucide="shield-alert" aria-hidden="true"></i>
+          <span>决策风险</span>
+          <span class="nav-alert" id="nav-risk-count">0</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-section">
+        <div class="section-label">当前会议</div>
+        <button class="meeting-switcher" id="meeting-switcher" type="button">
+          <span class="meeting-icon"><i data-lucide="calendar-days" aria-hidden="true"></i></span>
+          <span class="meeting-switcher-copy">
+            <strong id="sidebar-meeting-title">产品周会</strong>
+            <small id="sidebar-meeting-date">2026.11.14</small>
+          </span>
+          <i data-lucide="chevrons-up-down" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <div class="sidebar-spacer"></div>
+
+      <div class="engine-status" title="本地语义引擎，无需联网">
+        <span class="status-light"></span>
+        <div>
+          <strong id="engine-name">本地语义引擎</strong>
+          <small id="engine-subtitle">离线可用 · 数据不出设备</small>
+        </div>
+        <i data-lucide="shield-check" aria-hidden="true"></i>
+      </div>
+
+      <button class="sidebar-action" id="reset-demo-btn" type="button">
+        <i data-lucide="rotate-ccw" aria-hidden="true"></i>
+        <span>恢复演示数据</span>
+      </button>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div class="mobile-brand">
+          <div class="brand-mark small" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <strong>拾令</strong>
+        </div>
+
+        <div class="topbar-meeting">
+          <div class="breadcrumb">
+            <span>工作台</span>
+            <i data-lucide="chevron-right" aria-hidden="true"></i>
+            <strong id="topbar-meeting-title">产品周会 · 企业知识库上线前评审</strong>
+          </div>
+          <div class="meeting-meta">
+            <span id="topbar-meeting-date">2026年11月14日</span>
+            <span class="meta-dot"></span>
+            <span id="topbar-participant-count">4人参会</span>
+            <span class="meta-dot"></span>
+            <span id="topbar-task-count">0项行动</span>
+          </div>
+        </div>
+
+        <div class="topbar-actions">
+          <label class="search-field" for="task-search">
+            <i data-lucide="search" aria-hidden="true"></i>
+            <input id="task-search" type="search" placeholder="搜索任务或负责人" autocomplete="off">
+            <kbd>⌘ K</kbd>
+          </label>
+          <button class="icon-button" id="export-json-btn" type="button" title="导出 JSON" aria-label="导出 JSON">
+            <i data-lucide="braces" aria-hidden="true"></i>
+          </button>
+          <button class="icon-button" id="export-md-btn" type="button" title="导出会议报告" aria-label="导出会议报告">
+            <i data-lucide="download" aria-hidden="true"></i>
+          </button>
+          <button class="primary-button" id="import-meeting-btn" type="button">
+            <i data-lucide="sparkles" aria-hidden="true"></i>
+            <span>导入会议</span>
+          </button>
+        </div>
+      </header>
+
+      <div class="content" id="content-root"></div>
+    </main>
+  </div>
+
+  <nav class="mobile-nav" aria-label="移动端导航">
+    <button class="is-active" type="button" data-view="board">
+      <i data-lucide="layout-dashboard" aria-hidden="true"></i>
+      <span>看板</span>
+    </button>
+    <button type="button" data-view="meeting">
+      <i data-lucide="file-text" aria-hidden="true"></i>
+      <span>记录</span>
+    </button>
+    <button type="button" data-view="risks">
+      <i data-lucide="shield-alert" aria-hidden="true"></i>
+      <span>风险</span>
+    </button>
+    <button type="button" id="mobile-import-btn">
+      <i data-lucide="plus" aria-hidden="true"></i>
+      <span>导入</span>
+    </button>
+  </nav>
+
+  <div class="modal-root" id="modal-root" aria-live="polite"></div>
+  <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+
+  <template id="icon-fallback-template">
+    <span class="icon-fallback" aria-hidden="true"></span>
+  </template>
+
+  <script src="vendor/lucide.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/*.log
+__pycache__/
+*.pyc
+.public_access_code
+.public_tunnel.json
+/screenshots/
+/docs/screenshots/
+/dist/
