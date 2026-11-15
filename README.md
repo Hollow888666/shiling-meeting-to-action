@@ -1,10 +1,16 @@
 # 拾令 Meeting to Action
 
-面向 AI+办公赛道的会议行动闭环 Demo。把会议原文转换成可追踪的任务、负责人、截止时间、决策和风险，并直接在任务看板中流转。
+面向 AI+办公赛道的会议行动闭环 Demo。上传文档、录音或会议文字后，一键完成材料解析、录音转写、行动项提取、完整性检查和最终文档生成，再把结果送入任务看板跟踪。
 
-![桌面界面](docs/assets/desktop.png)
+<p align="center">
+  <strong>AI 自动处理：从会议材料到可执行任务与最终文档</strong>
+</p>
 
 ![AI 自动模式](docs/assets/auto-mode.png)
+
+<p align="center">
+  <img src="docs/assets/desktop.png" alt="任务看板" width="900">
+</p>
 
 <p>
   <img src="docs/assets/mobile.png" alt="手机界面" width="320">
@@ -18,6 +24,13 @@
 - 负责人、截止时间和验收标准不清晰。
 - 决策和风险没有单独记录，后续无法追溯。
 - 会开完了，但任务状态、阻塞和延期没人持续跟进。
+
+## AI 自动处理
+
+1. 上传 TXT、MD、CSV、JSON、PDF、DOCX、PPTX 或会议录音。
+2. AI 自动模式依次完成文档解析、录音转写、会议提取和完整性检查。
+3. 负责人或截止时间缺失时，在同一页面补齐。
+4. 生成 Markdown 最终文档，同时写入任务看板和 SQLite。
 
 ## 当前能力
 
@@ -63,7 +76,7 @@ http://127.0.0.1:8765
 D:\Python\python.exe server.py --host 0.0.0.0 --port 8765
 ```
 
-SQLite 数据文件位于 `data/shiling.db`。
+SQLite 数据文件默认位于 `data/shiling.db`。需要隔离测试、演示或部署数据时，可通过 `SHILING_DATABASE_PATH` 指定其他路径。
 
 ### 一键验收
 

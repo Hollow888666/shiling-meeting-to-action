@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from pathlib import Path
@@ -38,6 +40,11 @@ def wait_for_server():
 
 
 def main():
+    database_temp = tempfile.TemporaryDirectory(prefix="shiling-ui-test-")
+    environment = os.environ.copy()
+    environment["SHILING_DATABASE_PATH"] = str(
+        Path(database_temp.name) / "ui-test.db"
+    )
     server = subprocess.Popen(
         [
             sys.executable,
@@ -48,6 +55,7 @@ def main():
             str(PORT),
         ],
         cwd=ROOT,
+        env=environment,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -72,6 +80,9 @@ def main():
             page.wait_for_timeout(600)
 
             expect(page.locator("#engine-name")).to_have_text("后端已连接")
+            expect(page.locator(".auto-view")).to_be_visible()
+            page.locator('.sidebar [data-view="board"]').click()
+            page.wait_for_timeout(450)
             expect(page.locator(".task-card")).to_have_count(5)
 
             page.get_by_role("button", name="导入会议").click()
@@ -118,6 +129,7 @@ def main():
             pass
         server.terminate()
         server.wait(timeout=5)
+        database_temp.cleanup()
 
 
 if __name__ == "__main__":

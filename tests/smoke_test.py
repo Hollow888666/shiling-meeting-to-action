@@ -21,6 +21,9 @@ def main():
         page.reload(wait_until="load")
         page.wait_for_timeout(400)
 
+        expect(page.locator(".auto-view")).to_be_visible()
+        page.locator('.sidebar [data-view="board"]').click()
+        page.wait_for_timeout(300)
         expect(page.locator(".task-card")).to_have_count(5)
 
         search = page.locator("#task-search")

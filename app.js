@@ -177,7 +177,7 @@ function createDemoState() {
     tasks: clone(DEMO_TASKS),
     decisions: clone(DEMO_DECISIONS),
     risks: clone(DEMO_RISKS),
-    view: "board",
+    view: "auto",
     query: "",
     ownerFilter: "all",
     compact: false,
@@ -198,7 +198,9 @@ function loadState() {
       ...createDemoState(),
       ...parsed,
       meeting: { ...createDemoState().meeting, ...parsed.meeting },
-      view: "board",
+      view: ["board", "meeting", "risks", "auto"].includes(parsed.view)
+        ? parsed.view
+        : "auto",
       query: "",
       ownerFilter: "all",
       compact: false,
@@ -215,6 +217,7 @@ function saveState() {
       tasks: state.tasks,
       decisions: state.decisions,
       risks: state.risks,
+      view: state.view,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
   } catch {

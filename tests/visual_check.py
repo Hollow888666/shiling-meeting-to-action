@@ -26,6 +26,10 @@ def run_desktop(browser):
     page.evaluate("localStorage.clear()")
     page.reload(wait_until="load")
     page.wait_for_timeout(500)
+    print("desktop_auto_heading=", page.locator(".auto-hero h1").inner_text())
+    page.screenshot(path=str(OUT / "desktop-auto.png"), full_page=True)
+    page.locator('.sidebar [data-view="board"]').click()
+    page.wait_for_timeout(400)
     page.get_by_role("button", name="导入会议").click()
     page.wait_for_timeout(350)
     page.screenshot(path=str(OUT / "desktop-import.png"), full_page=True)
@@ -57,6 +61,10 @@ def run_mobile(browser):
     page.evaluate("localStorage.clear()")
     page.reload(wait_until="load")
     page.wait_for_timeout(500)
+    print("mobile_auto_heading=", page.locator(".auto-hero h1").inner_text())
+    page.screenshot(path=str(OUT / "mobile-auto.png"), full_page=True)
+    page.locator('.mobile-nav [data-view="board"]').click()
+    page.wait_for_timeout(400)
     print("mobile_heading=", page.locator("h1").inner_text())
     print(
         "mobile_scroll=",

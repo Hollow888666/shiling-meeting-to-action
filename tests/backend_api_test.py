@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -98,6 +100,11 @@ def wait_for_server():
 
 
 def main():
+    database_temp = tempfile.TemporaryDirectory(prefix="shiling-api-test-")
+    environment = os.environ.copy()
+    environment["SHILING_DATABASE_PATH"] = str(
+        Path(database_temp.name) / "api-test.db"
+    )
     server = subprocess.Popen(
         [
             sys.executable,
@@ -108,6 +115,7 @@ def main():
             str(PORT),
         ],
         cwd=ROOT,
+        env=environment,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -186,6 +194,7 @@ def main():
             pass
         server.terminate()
         server.wait(timeout=5)
+        database_temp.cleanup()
 
 
 if __name__ == "__main__":

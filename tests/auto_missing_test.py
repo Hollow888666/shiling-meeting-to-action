@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from pathlib import Path
@@ -32,9 +34,15 @@ def request(path: str, method: str = "GET", body: dict | None = None):
 
 
 def main():
+    database_temp = tempfile.TemporaryDirectory(prefix="shiling-auto-missing-test-")
+    environment = os.environ.copy()
+    environment["SHILING_DATABASE_PATH"] = str(
+        Path(database_temp.name) / "auto-missing-test.db"
+    )
     server = subprocess.Popen(
         [sys.executable, "server.py", "--host", "127.0.0.1", "--port", str(PORT)],
         cwd=ROOT,
+        env=environment,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -94,6 +102,7 @@ def main():
             pass
         server.terminate()
         server.wait(timeout=5)
+        database_temp.cleanup()
 
 
 if __name__ == "__main__":

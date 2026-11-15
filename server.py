@@ -35,7 +35,13 @@ from backend.transcription import (
 
 
 ROOT = Path(__file__).resolve().parent
-DATABASE = Database(ROOT / "data" / "shiling.db")
+DATABASE_PATH = Path(
+    os.getenv("SHILING_DATABASE_PATH", "").strip()
+    or ROOT / "data" / "shiling.db"
+)
+if not DATABASE_PATH.is_absolute():
+    DATABASE_PATH = ROOT / DATABASE_PATH
+DATABASE = Database(DATABASE_PATH)
 ACCESS_CODE = os.getenv("SHILING_ACCESS_CODE", "").strip()
 STARTED_AT = time.time()
 

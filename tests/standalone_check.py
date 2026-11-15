@@ -25,6 +25,9 @@ def main():
         page.reload(wait_until="load")
         page.wait_for_timeout(600)
 
+        expect(page.locator(".auto-view")).to_be_visible()
+        page.locator('.mobile-nav [data-view="board"]').click()
+        page.wait_for_timeout(350)
         expect(page.locator("h1")).to_have_text("行动任务看板")
         expect(page.locator(".task-card")).to_have_count(5)
         assert page.evaluate("document.body.scrollWidth") == 390
