@@ -12,6 +12,8 @@
 | `SHILING_LLM_BASE_URL` | 否 | OpenAI Chat Completions 兼容地址，例如 `https://provider/v1` |
 | `SHILING_LLM_MODEL` | 否 | 模型名称 |
 | `SHILING_LLM_API_KEY` | 否 | 模型 API Key |
+| `OPENAI_API_KEY` | 录音转写必填 | OpenAI Audio API Key |
+| `OPENAI_TRANSCRIBE_MODEL` | 否 | 默认 `gpt-4o-transcribe-diarize` |
 
 ## 启动命令
 

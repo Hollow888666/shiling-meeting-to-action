@@ -30,7 +30,7 @@ def main():
         assert page.evaluate("document.body.scrollWidth") == 390
         assert all(url.startswith("file:") or url.startswith("data:") for url in requests), requests
 
-        page.get_by_role("button", name="导入").click()
+        page.locator("#import-meeting-btn").click()
         page.get_by_role("button", name="载入示例会议").click()
         page.get_by_role("button", name="开始提取").click()
         page.wait_for_timeout(2400)

@@ -64,6 +64,8 @@ def clean_sentence(text: str) -> str:
 def detect_task(text: str) -> bool:
     if not text:
         return False
+    if text.startswith("#") or re.match(r"^\[(演示文档|录音转写|人工补充)", text):
+        return False
     if re.match(r"^(会议|日期|时间|地点|参会|主题)[：:]", text):
         return False
     if re.search(r"上线门槛|不上线", text) and not re.search(
@@ -73,6 +75,11 @@ def detect_task(text: str) -> bool:
     if re.search(r"设计稿会在.*给到", text):
         return False
     if not TASK_ACTION_PATTERN.search(text):
+        return False
+    if RISK_PATTERN.search(text) and not re.search(
+        r"负责|请[\w\u4e00-\u9fff]{2,4}|完成|整理|补齐|提交|准备|安排|拉通|截止",
+        text,
+    ):
         return False
     if re.match(r"^(决定|确定|统一|拍板|结论)", text) and not re.search(
         r"负责|完成|整理|提交|更新|安排", text
@@ -291,6 +298,13 @@ def extract_meeting(text: str, today: date | None = None) -> dict[str, Any]:
 
     sentences = []
     for line in parsed_lines:
+        body = line["body"].strip()
+        if body == title.strip() or re.match(r"^(日期|参会)[：:]", body):
+            continue
+        if body.startswith("#") or re.match(
+            r"^\[(演示文档|录音转写|人工补充)", line["body"]
+        ):
+            continue
         for part in re.split(r"[。！？!?；;]+", line["body"]):
             part = part.strip()
             if len(part) >= 4:

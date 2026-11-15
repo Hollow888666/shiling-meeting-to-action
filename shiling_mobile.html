@@ -1579,6 +1579,692 @@ svg {
   background: var(--soft);
 }
 
+.is-auto-mode .topbar-actions {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.auto-view {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.auto-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 8px 0 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.auto-kicker {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--blue);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.auto-hero h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.25;
+}
+
+.auto-hero p {
+  max-width: 680px;
+  margin: 9px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.auto-backend-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--paper);
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.auto-backend-badge.is-online {
+  color: var(--green);
+  border-color: #bfe5d5;
+  background: var(--green-soft);
+}
+
+.auto-progress {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 20px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.auto-progress-step {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 52px;
+  padding: 0 15px;
+  color: var(--muted);
+}
+
+.auto-progress-step + .auto-progress-step::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 15px;
+  bottom: 15px;
+  width: 1px;
+  background: var(--line);
+}
+
+.auto-progress-step > span {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--paper);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.auto-progress-step strong {
+  font-size: 10px;
+}
+
+.auto-progress-step.is-active {
+  color: var(--blue);
+}
+
+.auto-progress-step.is-active > span {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.auto-progress-step.is-complete {
+  color: var(--green);
+}
+
+.auto-progress-step.is-complete > span {
+  color: var(--paper);
+  border-color: var(--green);
+  background: var(--green);
+}
+
+.auto-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 18px;
+  align-items: start;
+}
+
+.auto-main,
+.auto-side {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+}
+
+.auto-main {
+  min-height: 500px;
+  padding: 22px;
+}
+
+.auto-side {
+  position: sticky;
+  top: calc(var(--topbar-height) + 18px);
+  overflow: hidden;
+}
+
+.auto-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.auto-section-head h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.auto-score {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 13px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.auto-dropzone {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 142px;
+  padding: 22px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--muted);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.auto-dropzone:hover,
+.auto-dropzone.is-dragover {
+  border-color: #9eb2ec;
+  background: var(--blue-soft);
+}
+
+.auto-dropzone:active {
+  transform: scale(0.995);
+}
+
+.auto-dropzone input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.auto-dropzone svg {
+  width: 25px;
+  height: 25px;
+  margin: 0 auto 10px;
+  color: var(--blue);
+}
+
+.auto-dropzone strong,
+.auto-dropzone small {
+  display: block;
+}
+
+.auto-dropzone strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.auto-dropzone small {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.auto-file-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.auto-file-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfcfd;
+  animation: fade-rise 220ms ease both;
+}
+
+.auto-file-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.auto-file-icon svg {
+  width: 15px;
+}
+
+.auto-file-item strong,
+.auto-file-item small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auto-file-item strong {
+  font-size: 10px;
+}
+
+.auto-file-item small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.auto-empty {
+  display: grid;
+  place-items: center;
+  min-height: 54px;
+  margin-top: 10px;
+  border: 1px dashed var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.auto-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.auto-action-band {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 18px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  box-shadow: var(--shadow-sm);
+}
+
+.auto-action-band strong,
+.auto-action-band span {
+  display: block;
+}
+
+.auto-action-band strong {
+  font-size: 12px;
+}
+
+.auto-action-band > div > span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.auto-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-width: 190px;
+  min-height: 48px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--blue);
+  color: var(--paper);
+  box-shadow: 0 8px 20px rgba(36, 91, 255, 0.18);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+}
+
+.auto-primary:hover {
+  background: var(--blue-dark);
+  box-shadow: 0 10px 24px rgba(36, 91, 255, 0.24);
+}
+
+.auto-primary:active {
+  transform: scale(0.97);
+}
+
+.auto-primary:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.auto-primary svg {
+  width: 18px;
+  height: 18px;
+}
+
+.auto-primary:disabled svg {
+  animation: spin 1s linear infinite;
+}
+
+.auto-processing-panel {
+  display: grid;
+  place-items: center;
+  min-height: 430px;
+  text-align: center;
+}
+
+.auto-processing-orbit {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  margin-bottom: 18px;
+  border: 1px solid #b9c9f8;
+  border-radius: 50%;
+  color: var(--blue);
+  background: var(--blue-soft);
+  animation: pulse-ring 1.4s ease-in-out infinite;
+}
+
+.auto-processing-orbit svg {
+  width: 28px;
+  height: 28px;
+}
+
+.auto-processing-panel h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.auto-processing-panel p {
+  max-width: 460px;
+  margin: 8px 0 18px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.7;
+}
+
+.auto-processing-bar {
+  position: relative;
+  width: min(360px, 100%);
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--line);
+}
+
+.auto-processing-bar span {
+  position: absolute;
+  width: 40%;
+  height: 100%;
+  background: var(--blue);
+  animation: auto-progress-slide 1.2s ease-in-out infinite;
+}
+
+.auto-processing-panel .auto-file-list {
+  width: min(520px, 100%);
+  margin-top: 22px;
+  text-align: left;
+}
+
+.auto-missing-list {
+  display: grid;
+  gap: 9px;
+}
+
+.auto-missing-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 11px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--orange);
+  border-radius: 7px;
+  background: var(--paper);
+}
+
+.auto-missing-item.required {
+  border-left-color: var(--red);
+  background: var(--red-soft);
+}
+
+.auto-missing-icon {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--red);
+}
+
+.auto-missing-icon svg {
+  width: 14px;
+}
+
+.auto-missing-copy {
+  min-width: 0;
+}
+
+.auto-missing-copy p {
+  margin: 5px 0 9px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.auto-resolution-input {
+  width: 100%;
+  height: 36px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  font-size: 10px;
+}
+
+.auto-resolution-input:focus {
+  border-color: #aebfed;
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(36, 91, 255, 0.08);
+}
+
+.auto-guidance {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.auto-ready-panel {
+  display: grid;
+  place-items: center;
+  min-height: 430px;
+  text-align: center;
+}
+
+.auto-ready-mark {
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  margin-bottom: 15px;
+  border-radius: 50%;
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.auto-ready-mark svg {
+  width: 30px;
+  height: 30px;
+}
+
+.auto-ready-panel h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.auto-ready-panel p {
+  max-width: 500px;
+  margin: 8px 0 18px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.7;
+}
+
+.auto-ready-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(80px, 1fr));
+  gap: 1px;
+  width: min(560px, 100%);
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+
+.auto-ready-metrics > div {
+  padding: 13px;
+  background: var(--paper);
+}
+
+.auto-ready-metrics strong,
+.auto-ready-metrics span {
+  display: block;
+}
+
+.auto-ready-metrics strong {
+  font-size: 19px;
+}
+
+.auto-ready-metrics span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.auto-document-preview {
+  max-height: 620px;
+  overflow: auto;
+  margin: 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfcfd;
+  color: var(--ink-soft);
+  font-family: "Cascadia Code", "Microsoft YaHei UI", monospace;
+  font-size: 10px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
+.auto-status-block {
+  padding: 15px;
+  border-bottom: 1px solid var(--line);
+}
+
+.auto-status-block:last-child {
+  border-bottom: 0;
+}
+
+.auto-status-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 12px;
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.auto-status-title svg {
+  width: 14px;
+  color: var(--blue);
+}
+
+.auto-capability-list {
+  display: grid;
+  gap: 8px;
+}
+
+.auto-capability {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 9px;
+}
+
+.auto-capability span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+}
+
+.auto-capability svg {
+  width: 12px;
+}
+
+.auto-capability strong {
+  font-size: 9px;
+}
+
+.auto-source-count {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.auto-source-count strong {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.auto-source-count span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.auto-source-detail {
+  display: grid;
+  gap: 5px;
+  margin-top: 11px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.auto-error-block {
+  background: var(--orange-soft);
+}
+
+.auto-error-block .auto-status-title {
+  color: var(--orange);
+}
+
+.auto-error-block p {
+  margin: 0 0 7px;
+  color: var(--ink-soft);
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+@keyframes auto-progress-slide {
+  from {
+    left: -45%;
+  }
+  to {
+    left: 105%;
+  }
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -2146,6 +2832,57 @@ svg {
     grid-template-columns: 1fr;
   }
 
+  .auto-hero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .auto-progress {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .auto-progress-step:nth-child(3)::before {
+    display: none;
+  }
+
+  .auto-progress-step:nth-child(n + 3) {
+    border-top: 1px solid var(--line);
+  }
+
+  .auto-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .auto-side {
+    position: static;
+  }
+
+  .auto-main {
+    min-height: 0;
+    padding: 17px;
+  }
+
+  .auto-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .auto-action-band {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .auto-primary {
+    width: 100%;
+  }
+
+  .auto-ready-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .auto-document-preview {
+    max-height: none;
+  }
+
   .transcript {
     max-height: none;
   }
@@ -2382,6 +3119,10 @@ svg {
           <span>决策风险</span>
           <span class="nav-alert" id="nav-risk-count">0</span>
         </button>
+        <button class="nav-item" type="button" data-view="auto">
+          <i data-lucide="wand-sparkles" aria-hidden="true"></i>
+          <span>AI 自动模式</span>
+        </button>
       </nav>
 
       <div class="sidebar-section">
@@ -2475,9 +3216,9 @@ svg {
       <i data-lucide="shield-alert" aria-hidden="true"></i>
       <span>风险</span>
     </button>
-    <button type="button" id="mobile-import-btn">
-      <i data-lucide="plus" aria-hidden="true"></i>
-      <span>导入</span>
+    <button type="button" data-view="auto">
+      <i data-lucide="wand-sparkles" aria-hidden="true"></i>
+      <span>AI</span>
     </button>
   </nav>
 
@@ -2646,6 +3387,30 @@ let state = loadState();
 let modalClosing = false;
 let draggingTaskId = null;
 let backendAvailable = false;
+let autoMode = createAutoModeState();
+let activeViewTransition = null;
+
+const AUDIO_EXTENSIONS = new Set([".mp3", ".wav", ".m4a", ".webm", ".ogg", ".aac", ".flac"]);
+const DOCUMENT_EXTENSIONS = new Set([".txt", ".md", ".csv", ".json", ".pdf", ".docx", ".pptx"]);
+
+function createAutoModeState() {
+  return {
+    phase: "input",
+    files: [],
+    documents: [],
+    audioTranscripts: [],
+    errors: [],
+    completeness: null,
+    finalDocument: "",
+    progressText: "",
+    title: "",
+    date: "",
+    participantsText: "",
+    manualText: "",
+    resolutions: {},
+    sourceStats: null,
+  };
+}
 
 function createDemoState() {
   return {
@@ -2759,6 +3524,41 @@ function getPublicAccess() {
     return sessionStorage.getItem(ACCESS_STORAGE_KEY) || "";
   } catch {
     return "";
+  }
+}
+
+async function apiUpload(path, formData, timeoutMs = 200000) {
+  if (!["http:", "https:"].includes(window.location.protocol)) {
+    throw new Error("Backend unavailable in file mode.");
+  }
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`/api${path}`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        ...(getPublicAccess() ? { "X-Shiling-Access": getPublicAccess() } : {}),
+      },
+      body: formData,
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(payload.error || `Upload failed: ${response.status}`);
+      error.code = payload.code;
+      error.payload = payload;
+      throw error;
+    }
+    backendAvailable = true;
+    return payload;
+  } catch (error) {
+    if (error.name === "AbortError") {
+      backendAvailable = false;
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
   }
 }
 
@@ -2921,6 +3721,8 @@ function renderApp() {
     root.innerHTML = renderMeetingView();
   } else if (state.view === "risks") {
     root.innerHTML = renderRisksView();
+  } else if (state.view === "auto") {
+    root.innerHTML = renderAutoView();
   } else {
     root.innerHTML = renderBoardView();
   }
@@ -2929,7 +3731,14 @@ function renderApp() {
 
 function renderWithTransition() {
   if (document.startViewTransition) {
-    document.startViewTransition(() => renderApp());
+    if (activeViewTransition) {
+      renderApp();
+      return;
+    }
+    activeViewTransition = document.startViewTransition(() => renderApp());
+    activeViewTransition.finished.finally(() => {
+      activeViewTransition = null;
+    });
   } else {
     renderApp();
   }
@@ -2958,6 +3767,7 @@ function updateChrome() {
       ? "Python API 与 SQLite 已连接"
       : "本地语义引擎，无需联网";
   }
+  document.body.classList.toggle("is-auto-mode", state.view === "auto");
 
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.view === state.view);
@@ -3310,6 +4120,545 @@ function renderRisksView() {
       </div>
     </section>
   `;
+}
+
+function renderAutoView() {
+  const completeness = autoMode.completeness;
+  const missing = completeness?.missing || [];
+  const requiredMissing = missing.filter((item) => item.severity === "required");
+  const config = autoButtonConfig(requiredMissing.length);
+  const activeStep = {
+    input: 0,
+    processing: 1,
+    missing: 2,
+    ready: 2,
+    final: 3,
+  }[autoMode.phase] ?? 0;
+
+  return `
+    <section class="view auto-view">
+      <div class="auto-hero">
+        <div>
+          <span class="auto-kicker">AI GUIDED WORKSPACE</span>
+          <h1>把会议材料交给 AI</h1>
+          <p>一次投入演示文档、录音或人工记录，依次完成转写、提取、完整性检查和最终文档。</p>
+        </div>
+        <div class="auto-backend-badge ${backendAvailable ? "is-online" : ""}">
+          <span class="status-light"></span>
+          <span>${backendAvailable ? "后端在线" : "等待后端"}</span>
+        </div>
+      </div>
+
+      <div class="auto-progress" aria-label="AI 处理进度">
+        ${["投入材料", "AI 生成", "完整性检查", "最终文档"]
+          .map(
+            (label, index) => `
+              <div class="auto-progress-step ${index < activeStep ? "is-complete" : ""} ${index === activeStep ? "is-active" : ""}">
+                <span>${index < activeStep ? "✓" : index + 1}</span>
+                <strong>${label}</strong>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+
+      <div class="auto-workspace">
+        <div class="auto-main">
+          ${renderAutoMain(requiredMissing)}
+        </div>
+        <aside class="auto-side">
+          ${renderAutoStatus()}
+        </aside>
+      </div>
+
+      <div class="auto-action-band">
+        <div>
+          <strong>${escapeHTML(config.instruction)}</strong>
+          <span>${escapeHTML(config.detail)}</span>
+        </div>
+        <button class="auto-primary" type="button" data-action="auto-primary" ${config.disabled ? "disabled" : ""}>
+          ${icon(config.icon)}
+          <span>${escapeHTML(config.label)}</span>
+        </button>
+      </div>
+    </section>
+  `;
+}
+
+function autoButtonConfig(requiredMissingCount) {
+  if (autoMode.phase === "processing") {
+    return {
+      label: "AI 正在处理",
+      instruction: autoMode.progressText || "AI 正在整理会议材料",
+      detail: "请保持页面打开，文档解析和录音转写可能需要一些时间。",
+      icon: "loader-circle",
+      disabled: true,
+    };
+  }
+  if (autoMode.phase === "missing") {
+    return {
+      label: "补齐并继续",
+      instruction: `还有 ${requiredMissingCount} 个必需项需要确认`,
+      detail: "填写下方缺失信息，AI 会重新检查完整性。",
+      icon: "list-checks",
+      disabled: false,
+    };
+  }
+  if (autoMode.phase === "ready") {
+    return {
+      label: "生成最终文档",
+      instruction: "会议信息已满足生成条件",
+      detail: "AI 将整理执行摘要、行动项、决策和风险。",
+      icon: "file-check-2",
+      disabled: false,
+    };
+  }
+  if (autoMode.phase === "final") {
+    return {
+      label: "下载最终文档",
+      instruction: "最终会议文档已经生成",
+      detail: "文档以 Markdown 格式导出，可直接归档或继续编辑。",
+      icon: "download",
+      disabled: false,
+    };
+  }
+  return {
+    label: "开始 AI 处理",
+    instruction: "先投入会议材料",
+    detail: "支持 TXT、MD、PDF、DOCX、PPTX 和常见音频文件。",
+    icon: "wand-sparkles",
+    disabled: false,
+  };
+}
+
+function renderAutoMain(requiredMissing) {
+  if (autoMode.phase === "processing") {
+    return `
+      <div class="auto-processing-panel">
+        <span class="auto-processing-orbit">${icon("sparkles")}</span>
+        <h2>${escapeHTML(autoMode.progressText || "AI 正在分析会议材料")}</h2>
+        <p>正在解析文档、识别发言、提取行动项并检查完整性。</p>
+        <div class="auto-processing-bar"><span></span></div>
+        ${renderAutoFileList()}
+      </div>
+    `;
+  }
+
+  if (autoMode.phase === "missing") {
+    return `
+      <div class="auto-section-head">
+        <div>
+          <span class="auto-kicker">COMPLETENESS CHECK</span>
+          <h2>补齐必要信息</h2>
+        </div>
+        <span class="auto-score">${autoMode.completeness?.score ?? 0}%</span>
+      </div>
+      <div class="auto-missing-list">
+        ${(autoMode.completeness?.missing || [])
+          .map((entry) => renderAutoMissingItem(entry))
+          .join("")}
+      </div>
+    `;
+  }
+
+  if (autoMode.phase === "ready") {
+    return `
+      <div class="auto-ready-panel">
+        <span class="auto-ready-mark">${icon("badge-check")}</span>
+        <h2>完整性检查通过</h2>
+        <p>会议标题、参会人、行动项负责人和截止时间已满足生成条件。</p>
+        <div class="auto-ready-metrics">
+          ${autoMetric("行动项", state.tasks.length)}
+          ${autoMetric("决策", state.decisions.length)}
+          ${autoMetric("风险", state.risks.length)}
+          ${autoMetric("完成度", `${autoMode.completeness?.score ?? 0}%`)}
+        </div>
+      </div>
+    `;
+  }
+
+  if (autoMode.phase === "final") {
+    return `
+      <div class="auto-section-head">
+        <div>
+          <span class="auto-kicker">FINAL DOCUMENT</span>
+          <h2>最终会议文档</h2>
+        </div>
+        <span class="auto-score">已生成</span>
+      </div>
+      <pre class="auto-document-preview">${escapeHTML(autoMode.finalDocument)}</pre>
+    `;
+  }
+
+  return `
+    <div class="auto-section-head">
+      <div>
+        <span class="auto-kicker">INPUT MATERIALS</span>
+        <h2>投入会议材料</h2>
+      </div>
+      <span class="auto-score">${autoMode.files.length} 个文件</span>
+    </div>
+    <label class="auto-dropzone" id="auto-dropzone">
+      <input id="auto-files" type="file" multiple accept=".txt,.md,.csv,.json,.pdf,.docx,.pptx,audio/*,.mp3,.wav,.m4a,.webm,.ogg,.aac,.flac">
+      <span>
+        ${icon("files")}
+        <strong>选择或拖入演示文档与录音</strong>
+        <small>文档：TXT MD CSV JSON PDF DOCX PPTX · 录音：MP3 WAV M4A WEBM</small>
+      </span>
+    </label>
+    ${renderAutoFileList()}
+    <div class="auto-form-grid">
+      <label class="field">
+        <span class="field-label">会议标题</span>
+        <input id="auto-title" type="text" value="${escapeHTML(autoMode.title)}" placeholder="例如：客户交付周会">
+      </label>
+      <label class="field">
+        <span class="field-label">会议日期</span>
+        <input id="auto-date" type="date" value="${escapeHTML(autoMode.date)}">
+      </label>
+      <label class="field full">
+        <span class="field-label">参会人员</span>
+        <input id="auto-participants" type="text" value="${escapeHTML(autoMode.participantsText)}" placeholder="用顿号或逗号分隔，例如：陈晨、林晓、周远">
+      </label>
+      <label class="field full">
+        <span class="field-label">人工补充记录</span>
+        <textarea id="auto-manual-text" placeholder="可粘贴会议文字、聊天记录或补充上下文">${escapeHTML(autoMode.manualText)}</textarea>
+      </label>
+    </div>
+  `;
+}
+
+function renderAutoFileList() {
+  if (!autoMode.files.length) {
+    return `<div class="auto-empty">尚未投入文件</div>`;
+  }
+  return `
+    <div class="auto-file-list">
+      ${autoMode.files
+        .map((file) => {
+          const ext = `.${file.name.split(".").pop()?.toLowerCase()}`;
+          const kind = AUDIO_EXTENSIONS.has(ext) ? "录音" : "文档";
+          return `
+            <div class="auto-file-item">
+              <span class="auto-file-icon">${icon(AUDIO_EXTENSIONS.has(ext) ? "audio-lines" : "file-text")}</span>
+              <div>
+                <strong>${escapeHTML(file.name)}</strong>
+                <small>${kind} · ${formatFileSize(file.size)}</small>
+              </div>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function renderAutoMissingItem(entry) {
+  const input = renderAutoMissingInput(entry);
+  return `
+    <div class="auto-missing-item ${entry.severity}">
+      <span class="auto-missing-icon">${icon(entry.severity === "required" ? "circle-alert" : "info")}</span>
+      <div class="auto-missing-copy">
+        <div class="entry-top">
+          <strong>${escapeHTML(entry.message)}</strong>
+          <span class="severity ${entry.severity === "required" ? "high" : "medium"}">${entry.severity === "required" ? "必需" : "建议"}</span>
+        </div>
+        <p>${escapeHTML(entry.suggestedAction)}</p>
+        ${input}
+      </div>
+    </div>
+  `;
+}
+
+function renderAutoMissingInput(entry) {
+  const current = autoMode.resolutions[entry.id] ?? missingDefaultValue(entry);
+  if (entry.field === "date" || entry.field === "due") {
+    return `<input class="auto-resolution-input" data-auto-resolution="${escapeHTML(entry.id)}" type="date" value="${escapeHTML(normalizeDate(current))}">`;
+  }
+  if (["title", "participants", "owner", "source"].includes(entry.field)) {
+    return `<input class="auto-resolution-input" data-auto-resolution="${escapeHTML(entry.id)}" type="text" value="${escapeHTML(current)}" placeholder="${escapeHTML(entry.suggestedAction)}">`;
+  }
+  return `<div class="auto-guidance">${escapeHTML(entry.suggestedAction)}</div>`;
+}
+
+function missingDefaultValue(entry) {
+  if (entry.entityType === "meeting") {
+    const mapping = {
+      title: state.meeting.title,
+      date: state.meeting.date,
+      participants: (state.meeting.participants || []).join("、"),
+      transcript: state.meeting.transcript,
+    };
+    return mapping[entry.field] || "";
+  }
+  const task = state.tasks.find((item) => item.id === entry.entityId);
+  return task?.[entry.field] || "";
+}
+
+function renderAutoStatus() {
+  const completeness = autoMode.completeness;
+  return `
+    <section class="auto-status-block">
+      <div class="auto-status-title">${icon("server-cog")}后端处理状态</div>
+      <div class="auto-capability-list">
+        ${autoCapability("document-extraction", "文档解析", autoMode.documents.length)}
+        ${autoCapability("audio-lines", "录音转写", autoMode.audioTranscripts.length)}
+        ${autoCapability("list-checks", "完整性检查", completeness ? `${completeness.score}%` : "待处理")}
+        ${autoCapability("file-check-2", "最终文档", autoMode.phase === "final" ? "已生成" : "待生成")}
+      </div>
+    </section>
+    <section class="auto-status-block">
+      <div class="auto-status-title">${icon("paperclip")}已投入材料</div>
+      <div class="auto-source-count">
+        <strong>${autoMode.files.length}</strong>
+        <span>个文件</span>
+      </div>
+      <div class="auto-source-detail">
+        <span>${autoMode.documents.length} 个文档已解析</span>
+        <span>${autoMode.audioTranscripts.length} 段录音已转写</span>
+        <span>${autoMode.manualText.trim() ? "包含人工补充" : "无人工补充"}</span>
+      </div>
+    </section>
+    ${
+      autoMode.errors.length
+        ? `
+          <section class="auto-status-block auto-error-block">
+            <div class="auto-status-title">${icon("triangle-alert")}需要处理</div>
+            ${autoMode.errors.map((error) => `<p>${escapeHTML(error)}</p>`).join("")}
+          </section>
+        `
+        : ""
+    }
+  `;
+}
+
+function autoCapability(iconName, label, value) {
+  return `
+    <div class="auto-capability">
+      <span>${icon(iconName)}${escapeHTML(label)}</span>
+      <strong>${escapeHTML(value)}</strong>
+    </div>
+  `;
+}
+
+function autoMetric(label, value) {
+  return `<div><strong>${escapeHTML(value)}</strong><span>${escapeHTML(label)}</span></div>`;
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function addAutoFiles(fileList) {
+  const incoming = Array.from(fileList || []);
+  for (const file of incoming) {
+    const ext = `.${file.name.split(".").pop()?.toLowerCase()}`;
+    if (!AUDIO_EXTENSIONS.has(ext) && !DOCUMENT_EXTENSIONS.has(ext)) {
+      autoMode.errors.push(`不支持的文件类型：${file.name}`);
+      continue;
+    }
+    if (
+      !autoMode.files.some(
+        (existing) => existing.name === file.name && existing.size === file.size,
+      )
+    ) {
+      autoMode.files.push(file);
+    }
+  }
+  renderWithTransition();
+}
+
+async function handleAutoPrimary() {
+  if (autoMode.phase === "processing") return;
+  if (autoMode.phase === "final") {
+    downloadFile(
+      `${safeFilename(state.meeting.title)}_最终会议文档.md`,
+      autoMode.finalDocument,
+      "text/markdown;charset=utf-8",
+    );
+    showToast("最终会议文档已下载。", "download");
+    return;
+  }
+  if (autoMode.phase === "input") {
+    if (!autoMode.files.length && !autoMode.manualText.trim()) {
+      showToast("请先投入演示文档、录音或人工记录。", "alert-circle");
+      return;
+    }
+    if (!backendAvailable) {
+      showToast("AI 自动模式需要后端服务。", "server-off");
+      return;
+    }
+    autoMode.errors = [];
+    autoMode.phase = "processing";
+    autoMode.progressText = "正在读取会议材料";
+    renderWithTransition();
+    await processAutoMaterials();
+    return;
+  }
+  if (autoMode.phase === "missing") {
+    await resolveAutoMissing();
+    return;
+  }
+  if (autoMode.phase === "ready") {
+    await loadFinalDocument();
+  }
+}
+
+async function processAutoMaterials() {
+  autoMode.documents = [];
+  autoMode.audioTranscripts = [];
+  try {
+    for (let index = 0; index < autoMode.files.length; index += 1) {
+      const file = autoMode.files[index];
+      const ext = `.${file.name.split(".").pop()?.toLowerCase()}`;
+      const isAudio = AUDIO_EXTENSIONS.has(ext);
+      autoMode.progressText = isAudio
+        ? `正在转写录音 ${index + 1}/${autoMode.files.length}：${file.name}`
+        : `正在解析文档 ${index + 1}/${autoMode.files.length}：${file.name}`;
+      renderWithTransition();
+      const formData = new FormData();
+      formData.append("file", file, file.name);
+      if (isAudio) {
+        formData.append("diarize", "true");
+        formData.append("language", "zh");
+        try {
+          const result = await apiUpload("/audio/transcribe", formData);
+          autoMode.audioTranscripts.push(result.audio);
+        } catch (error) {
+          if (error.code === "transcription_not_configured") {
+            autoMode.errors.push(
+              "录音转写未配置：请在本机设置 OPENAI_API_KEY 后重启后端。",
+            );
+          } else {
+            autoMode.errors.push(`${file.name} 转写失败：${error.message}`);
+          }
+        }
+      } else {
+        try {
+          const result = await apiUpload("/materials/extract", formData);
+          autoMode.documents.push(result.material);
+        } catch (error) {
+          autoMode.errors.push(`${file.name} 解析失败：${error.message}`);
+        }
+      }
+    }
+
+    if (
+      !autoMode.documents.length &&
+      !autoMode.audioTranscripts.length &&
+      !autoMode.manualText.trim()
+    ) {
+      autoMode.phase = "input";
+      renderWithTransition();
+      showToast("没有获得可用的会议文本，请查看右侧错误提示。", "alert-circle");
+      return;
+    }
+
+    autoMode.progressText = "正在生成会议记录与行动项";
+    renderWithTransition();
+    const participants = parseParticipantNames(autoMode.participantsText);
+    const payload = await apiRequest("/meetings/compose", {
+      method: "POST",
+      body: {
+        title: autoMode.title,
+        date: autoMode.date,
+        participants,
+        documents: autoMode.documents,
+        audioTranscripts: autoMode.audioTranscripts,
+        manualText: autoMode.manualText,
+      },
+    });
+    applyServerState(payload.state);
+    autoMode.completeness = payload.completeness;
+    autoMode.sourceStats = payload.sourceStats;
+    autoMode.title = state.meeting.title || autoMode.title;
+    autoMode.date = state.meeting.date || autoMode.date;
+    autoMode.participantsText =
+      (state.meeting.participants || []).join("、") || autoMode.participantsText;
+    autoMode.phase = payload.completeness?.ready ? "ready" : "missing";
+    autoMode.resolutions = {};
+    renderWithTransition();
+    showToast(
+      payload.completeness?.ready
+        ? "会议内容已生成，完整性检查通过。"
+        : "会议内容已生成，请补齐缺失项。",
+      payload.completeness?.ready ? "badge-check" : "list-checks",
+    );
+  } catch (error) {
+    autoMode.errors.push(error.message || "AI 处理失败。");
+    autoMode.phase = "input";
+    renderWithTransition();
+    showToast("AI 处理中断，请检查后端或材料格式。", "alert-circle");
+  }
+}
+
+async function resolveAutoMissing() {
+  const meetingPayload = {};
+  const taskPayloads = {};
+  for (const [id, value] of Object.entries(autoMode.resolutions)) {
+    const [entityType, entityId, field] = id.split(":");
+    if (!value) continue;
+    if (entityType === "meeting") {
+      if (field === "participants") {
+        meetingPayload.participants = parseParticipantNames(value);
+      } else {
+        meetingPayload[field] = value;
+      }
+    } else if (entityType === "task") {
+      taskPayloads[entityId] = taskPayloads[entityId] || {};
+      taskPayloads[entityId][field] = value;
+    }
+  }
+
+  try {
+    if (Object.keys(meetingPayload).length) {
+      const result = await apiRequest("/meetings/current", {
+        method: "PUT",
+        body: meetingPayload,
+      });
+      applyServerState(result.state);
+    }
+    for (const [taskId, payload] of Object.entries(taskPayloads)) {
+      await apiRequest(`/tasks/${encodeURIComponent(taskId)}`, {
+        method: "PUT",
+        body: payload,
+      });
+    }
+    const result = await apiRequest("/meetings/completeness");
+    applyServerState(result.state);
+    autoMode.completeness = result.completeness;
+    autoMode.resolutions = {};
+    autoMode.phase = result.completeness.ready ? "ready" : "missing";
+    renderWithTransition();
+    showToast(
+      result.completeness.ready ? "必需信息已补齐。" : "还有缺失项需要确认。",
+      result.completeness.ready ? "badge-check" : "circle-alert",
+    );
+  } catch (error) {
+    showToast(`缺失项保存失败：${error.message}`, "alert-circle");
+  }
+}
+
+async function loadFinalDocument() {
+  try {
+    const result = await apiRequest("/meetings/final-document");
+    autoMode.completeness = result.completeness;
+    autoMode.finalDocument = result.document;
+    autoMode.phase = "final";
+    renderWithTransition();
+    showToast("最终会议文档已生成。", "file-check-2");
+  } catch (error) {
+    showToast(`最终文档生成失败：${error.message}`, "alert-circle");
+  }
+}
+
+function parseParticipantNames(value) {
+  return String(value || "")
+    .split(/[、,，/\s]+/)
+    .map((name) => name.trim())
+    .filter(Boolean);
 }
 
 function activeTaskCount() {
@@ -3686,6 +5035,11 @@ function extractMeeting(text) {
 
   const sentences = [];
   parsedLines.forEach((line) => {
+    const body = line.body.trim();
+    if (body === title.trim() || /^(日期|参会)[：:]/.test(body)) return;
+    if (body.startsWith("#") || /^\[(演示文档|录音转写|人工补充)/.test(body)) {
+      return;
+    }
     line.body
       .split(/[。！？!?；;]+/)
       .map((part) => part.trim())
@@ -3795,12 +5149,21 @@ function cleanSentence(text) {
 
 function detectTask(text) {
   if (!text) return false;
+  if (text.startsWith("#") || /^\[(演示文档|录音转写|人工补充)/.test(text)) return false;
   if (/^(会议|日期|时间|地点|参会|主题)[：:]/.test(text)) return false;
   if (/上线门槛|不上线/.test(text) && !/负责|完成|整理|提交|准备|安排|拉通|补齐/.test(text)) return false;
   if (/设计稿会在.*给到/.test(text)) return false;
   const actionPattern =
     /负责|请[\p{L}\w]{2,4}|需要|完成|整理|输出|准备|对接|确认|提交|更新|安排|推进|测试|录制|发布|做一次|搭建|修复|核对|撰写|设计|开发|报名|邀请|跟进|补齐|拉通|同步|梳理|标记|验收|交付|导入|回滚|检查|落实|关闭/;
   if (!actionPattern.test(text)) return false;
+  if (
+    /风险|阻塞|担心|问题|冲突|不稳定|缺少|缺|依赖|来不及|延迟|未定|不确定|难点|故障|无法|低于|门槛|不上线/.test(
+      text,
+    ) &&
+    !/负责|请[\p{L}\w]{2,4}|完成|整理|补齐|提交|准备|安排|拉通|截止/.test(text)
+  ) {
+    return false;
+  }
   if (/^(决定|确定|统一|拍板|结论)/.test(text) && !/负责|完成|整理|提交|更新|安排/.test(text)) return false;
   return text.length >= 4;
 }
@@ -4014,6 +5377,7 @@ function handleClick(event) {
     }
     if (action === "copy-summary") copySummary();
     if (action === "export-md") exportMarkdown();
+    if (action === "auto-primary") handleAutoPrimary();
     if (action === "new-meeting") {
       closeModal(true);
       openImportModal();
@@ -4178,6 +5542,15 @@ function handleDeleteTask(event) {
 }
 
 function handleInput(event) {
+  if (event.target.id === "auto-title") autoMode.title = event.target.value;
+  if (event.target.id === "auto-date") autoMode.date = event.target.value;
+  if (event.target.id === "auto-participants") {
+    autoMode.participantsText = event.target.value;
+  }
+  if (event.target.id === "auto-manual-text") autoMode.manualText = event.target.value;
+  if (event.target.matches("[data-auto-resolution]")) {
+    autoMode.resolutions[event.target.dataset.autoResolution] = event.target.value;
+  }
   if (event.target.id === "task-search" || event.target.id === "mobile-task-search") {
     state.query = event.target.value;
     const id = event.target.id;
@@ -4192,6 +5565,11 @@ function handleInput(event) {
 }
 
 function handleFileChange(event) {
+  if (event.target.id === "auto-files") {
+    addAutoFiles(event.target.files);
+    event.target.value = "";
+    return;
+  }
   if (event.target.id !== "meeting-file") return;
   const file = event.target.files?.[0];
   if (!file) return;
@@ -4226,6 +5604,13 @@ function handleDragEnd(event) {
 }
 
 function handleDragOver(event) {
+  const autoDropzone = event.target.closest("#auto-dropzone");
+  if (autoDropzone) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    autoDropzone.classList.add("is-dragover");
+    return;
+  }
   const column = event.target.closest(".board-column");
   if (!column) return;
   event.preventDefault();
@@ -4234,6 +5619,13 @@ function handleDragOver(event) {
 }
 
 function handleDrop(event) {
+  const autoDropzone = event.target.closest("#auto-dropzone");
+  if (autoDropzone) {
+    event.preventDefault();
+    autoDropzone.classList.remove("is-dragover");
+    addAutoFiles(event.dataTransfer.files);
+    return;
+  }
   const column = event.target.closest(".board-column");
   if (!column) return;
   event.preventDefault();
@@ -4248,6 +5640,11 @@ function handleDrop(event) {
 }
 
 function handleDragLeave(event) {
+  const autoDropzone = event.target.closest("#auto-dropzone");
+  if (autoDropzone && !autoDropzone.contains(event.relatedTarget)) {
+    autoDropzone.classList.remove("is-dragover");
+    return;
+  }
   const column = event.target.closest(".board-column");
   if (!column) return;
   if (!column.contains(event.relatedTarget)) column.classList.remove("is-drop-target");

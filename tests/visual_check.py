@@ -65,7 +65,7 @@ def run_mobile(browser):
         page.evaluate("window.innerWidth"),
     )
     page.screenshot(path=str(OUT / "mobile-board.png"), full_page=True)
-    page.get_by_role("button", name="导入").click()
+    page.locator("#import-meeting-btn").click()
     page.wait_for_timeout(350)
     page.screenshot(path=str(OUT / "mobile-import.png"), full_page=True)
     print("mobile_errors=", errors)

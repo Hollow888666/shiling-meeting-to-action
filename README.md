@@ -4,6 +4,8 @@
 
 ![桌面界面](docs/assets/desktop.png)
 
+![AI 自动模式](docs/assets/auto-mode.png)
+
 <p>
   <img src="docs/assets/mobile.png" alt="手机界面" width="320">
 </p>
@@ -33,6 +35,11 @@
 - 后端保留会议历史，支持切换旧会议和新建会议。
 - 任务评论、审计日志、负责人负载分析、逾期统计和服务端搜索。
 - 支持可选 OpenAI Chat Completions 兼容模型，提取失败时自动回退本地规则。
+- AI 自动模式：单按钮引导完成材料上传、录音转写、任务生成、完整性检查和最终文档。
+- 支持 TXT、MD、CSV、JSON、PDF、DOCX、PPTX 会议材料解析。
+- 支持会议录音转写和说话人分离（需要 `OPENAI_API_KEY`）。
+- 自动检查会议元数据和任务负责人、截止时间等缺失项。
+- 生成 Markdown 最终会议文档。
 
 ## 启动
 
@@ -88,11 +95,17 @@ SQLite 数据文件位于 `data/shiling.db`。
 | GET | `/api/health` | 健康检查 |
 | GET | `/api/state` | 获取当前会议、任务、决策和风险 |
 | GET | `/api/meetings` | 获取会议历史 |
+| GET | `/api/meetings/completeness` | 检查当前会议完整性 |
+| GET | `/api/meetings/final-document` | 生成最终会议文档 |
 | GET | `/api/analytics` | 获取任务、负责人、逾期和风险统计 |
 | GET | `/api/activity?limit=50` | 获取审计日志 |
 | GET | `/api/search?q=知识库` | 服务端搜索任务、决策和风险 |
 | POST | `/api/meetings/extract` | 提取会议并写入数据库 |
+| POST | `/api/materials/extract` | 解析上传的演示文档 |
+| POST | `/api/audio/transcribe` | 转写会议录音 |
+| POST | `/api/meetings/compose` | 合成文档与录音并生成会议 |
 | POST | `/api/meetings/{id}/activate` | 切换当前会议 |
+| PUT | `/api/meetings/current` | 补充会议标题、日期和参会人 |
 | POST | `/api/tasks` | 新建任务 |
 | GET | `/api/tasks/{id}/comments` | 获取任务评论 |
 | POST | `/api/tasks/{id}/comments` | 新增任务评论 |
@@ -119,6 +132,9 @@ D:\Python\python.exe tests\backend_core_test.py
 D:\Python\python.exe tests\visual_check.py
 D:\Python\python.exe tests\backend_ui_test.py
 D:\Python\python.exe tests\standalone_check.py
+D:\Python\python.exe tests\backend_materials_test.py
+D:\Python\python.exe tests\auto_mode_test.py
+D:\Python\python.exe tests\auto_missing_test.py
 ```
 
 `smoke_test.py` 覆盖搜索、负责人筛选、编辑、新建、拖拽、风险转任务和报告导出。
@@ -130,6 +146,12 @@ D:\Python\python.exe tests\standalone_check.py
 `backend_ui_test.py` 验证前端连接后端、会议提取、SQLite 持久化和任务更新。
 
 `standalone_check.py` 验证单文件离线版在手机宽度下可运行。
+
+`backend_materials_test.py` 验证 PDF/DOCX/PPTX 等材料处理和最终文档结构。
+
+`auto_mode_test.py` 验证单按钮自动模式从材料上传到最终文档生成。
+
+`auto_missing_test.py` 验证缺失负责人、截止时间等字段的补齐流程。
 
 ## 架构
 
@@ -150,6 +172,17 @@ SHILING_LLM_BASE_URL=https://your-provider.example/v1
 SHILING_LLM_MODEL=your-model
 SHILING_LLM_API_KEY=your-api-key
 ```
+
+## 录音转写
+
+设置 `OPENAI_API_KEY` 后重启后端，AI 自动模式会上传录音到 OpenAI Audio API。默认使用 `gpt-4o-transcribe-diarize` 并生成说话人分段。
+
+```text
+OPENAI_API_KEY=your-api-key
+OPENAI_TRANSCRIBE_MODEL=gpt-4o-transcribe-diarize
+```
+
+没有配置 Key 时，系统会在 AI 自动模式中明确提示，不会静默丢弃录音。
 
 ## 路演一句话
 

@@ -4,6 +4,7 @@ import json
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 from urllib.parse import quote
@@ -28,6 +29,62 @@ def request(path: str, method: str = "GET", body: dict | None = None):
     )
     with urllib.request.urlopen(req, timeout=15) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def upload_file(path: str, filename: str, content: bytes, content_type: str):
+    boundary = "----ShilingTestBoundary"
+    body = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+        f"Content-Type: {content_type}\r\n\r\n"
+    ).encode("utf-8") + content + (
+        f"\r\n--{boundary}--\r\n"
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        BASE + path,
+        data=body,
+        method="POST",
+        headers={
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "Content-Length": str(len(body)),
+        },
+    )
+    with urllib.request.urlopen(req, timeout=15) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def upload_text(filename: str, content: str):
+    return upload_file(
+        "/api/materials/extract",
+        filename,
+        content.encode("utf-8"),
+        "text/markdown; charset=utf-8",
+    )
+
+
+def fake_audio():
+    boundary = "----ShilingAudioBoundary"
+    body = (
+        f"--{boundary}\r\n"
+        'Content-Disposition: form-data; name="file"; filename="meeting.wav"\r\n'
+        "Content-Type: audio/wav\r\n\r\n"
+        "RIFF"
+        f"\r\n--{boundary}--\r\n"
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        BASE + "/api/audio/transcribe",
+        data=body,
+        method="POST",
+        headers={
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "Content-Length": str(len(body)),
+        },
+    )
+    try:
+        urllib.request.urlopen(req, timeout=15)
+    except urllib.error.HTTPError as error:
+        return error.code, json.loads(error.read().decode("utf-8"))
+    return None, None
 
 
 def wait_for_server():
@@ -64,6 +121,12 @@ def main():
         assert analytics["totalTasks"] == 5
         assert "owners" in analytics
 
+        health = request("/api/health")
+        if not health["transcriptionConfigured"]:
+            status, payload = fake_audio()
+            assert status == 503
+            assert payload["code"] == "transcription_not_configured"
+
         search = request(f"/api/search?q={quote('知识库')}")
         assert search["tasks"]
 
@@ -79,6 +142,34 @@ def main():
 
         activity = request("/api/activity?limit=20")
         assert any(item["type"] == "comment.added" for item in activity["activities"])
+
+        material = upload_text(
+            "周会材料.md",
+            "# 客户交付周会\n陈晨：请林晓在11月20日前完成权限清单。",
+        )["material"]
+        assert material["charCount"] > 10
+        composed = request(
+            "/api/meetings/compose",
+            "POST",
+            {
+                "title": "客户交付周会",
+                "participants": ["陈晨", "林晓"],
+                "documents": [material],
+                "manualText": "补充：上线前完成验收。",
+            },
+        )
+        assert composed["state"]["meeting"]["title"] == "客户交付周会"
+        assert "completeness" in composed
+
+        updated_meeting = request(
+            "/api/meetings/current",
+            "PUT",
+            {"participants": ["陈晨", "林晓", "周远"]},
+        )
+        assert len(updated_meeting["state"]["meeting"]["participants"]) == 3
+
+        final_document = request("/api/meetings/final-document")
+        assert "# 客户交付周会" in final_document["document"]
 
         extracted = request(
             "/api/meetings/extract",

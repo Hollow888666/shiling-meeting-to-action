@@ -306,6 +306,54 @@ class Database:
             )
         return self.get_state(meeting_id)
 
+    def update_meeting(self, payload: dict[str, Any]) -> dict[str, Any]:
+        meeting_id = self.current_meeting_id()
+        with self.connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM meetings WHERE id = ?", (meeting_id,)
+            ).fetchone()
+            if row is None:
+                raise KeyError(meeting_id)
+            title = str(payload.get("title", row["title"]) or "").strip()
+            meeting_date = str(payload.get("date", row["date"]) or "").strip()
+            participants = payload.get("participants")
+            if participants is None:
+                participants = json.loads(row["participants_json"])
+            transcript = str(payload.get("transcript", row["transcript"]) or "")
+            connection.execute(
+                """
+                UPDATE meetings
+                SET title = ?, date = ?, participants_json = ?, transcript = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    title,
+                    meeting_date,
+                    json.dumps(
+                        [
+                            str(name).strip()
+                            for name in participants
+                            if str(name).strip()
+                        ],
+                        ensure_ascii=False,
+                    ),
+                    transcript,
+                    datetime.now().strftime("%m月%d日 %H:%M"),
+                    meeting_id,
+                ),
+            )
+            self._log_activity(
+                connection,
+                meeting_id,
+                "meeting.updated",
+                "meeting",
+                meeting_id,
+                "更新会议信息",
+                {"fields": sorted(payload.keys())},
+            )
+        return self.get_state(meeting_id)
+
     def _insert_task(
         self, connection: sqlite3.Connection, meeting_id: str, task: dict[str, Any]
     ) -> None:

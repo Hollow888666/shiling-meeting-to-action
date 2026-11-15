@@ -8,6 +8,8 @@ import os
 import re
 import socket
 import time
+from email import policy
+from email.parser import BytesParser
 from http import HTTPStatus
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -15,9 +17,20 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 from backend.extraction import extract_meeting
+from backend.completeness import (
+    analyze_completeness,
+    build_final_document,
+    compose_meeting_material,
+)
+from backend.documents import extract_document
 from backend.llm import is_configured as llm_is_configured
 from backend.llm import try_extract_with_llm
 from backend.store import Database
+from backend.transcription import (
+    TranscriptionNotConfigured,
+    is_configured as transcription_is_configured,
+    transcribe_audio,
+)
 
 
 ROOT = Path(__file__).resolve().parent
@@ -74,7 +87,7 @@ class ShilingHandler(BaseHTTPRequestHandler):
                     if llm_is_configured()
                     else "local-semantic-rules",
                     "database": "sqlite",
-                    "version": "0.2.0",
+                    "version": "0.3.0",
                     "uptimeSeconds": int(time.time() - STARTED_AT),
                     "features": [
                         "meeting-history",
@@ -84,7 +97,13 @@ class ShilingHandler(BaseHTTPRequestHandler):
                         "server-search",
                         "access-code",
                         "optional-llm",
+                        "document-extraction",
+                        "audio-transcription",
+                        "meeting-completeness",
+                        "final-document",
+                        "guided-auto-mode",
                     ],
+                    "transcriptionConfigured": transcription_is_configured(),
                 },
             )
             return
@@ -93,6 +112,27 @@ class ShilingHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/meetings":
             self._json(HTTPStatus.OK, DATABASE.list_meetings())
+            return
+        if path == "/api/meetings/completeness":
+            state = DATABASE.get_state()
+            self._json(
+                HTTPStatus.OK,
+                {
+                    "state": state,
+                    "completeness": analyze_completeness(state),
+                },
+            )
+            return
+        if path == "/api/meetings/final-document":
+            state = DATABASE.get_state()
+            completeness = analyze_completeness(state)
+            self._json(
+                HTTPStatus.OK,
+                {
+                    "completeness": completeness,
+                    "document": build_final_document(state, completeness),
+                },
+            )
             return
         if path == "/api/analytics":
             self._json(HTTPStatus.OK, DATABASE.analytics())
@@ -126,6 +166,49 @@ class ShilingHandler(BaseHTTPRequestHandler):
         if not self._authorized(api=True):
             return
         try:
+            if path == "/api/materials/extract":
+                fields, files = self._read_multipart(max_bytes=50 * 1024 * 1024)
+                upload = files.get("file")
+                if not upload:
+                    raise ValueError("请选择一个演示文档文件。")
+                result = extract_document(
+                    upload["filename"],
+                    upload["content"],
+                )
+                self._json(HTTPStatus.OK, {"material": result})
+                return
+            if path == "/api/audio/transcribe":
+                fields, files = self._read_multipart(max_bytes=50 * 1024 * 1024)
+                upload = files.get("file")
+                if not upload:
+                    raise ValueError("请选择一个录音文件。")
+                diarize = str(fields.get("diarize", "true")).lower() not in {
+                    "0",
+                    "false",
+                    "no",
+                }
+                language = str(fields.get("language") or "zh")
+                try:
+                    result = transcribe_audio(
+                        upload["filename"],
+                        upload["content"],
+                        upload["contentType"],
+                        diarize=diarize,
+                        language=language,
+                    )
+                except TranscriptionNotConfigured as error:
+                    self._json(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        {
+                            "error": str(error),
+                            "code": "transcription_not_configured",
+                            "requiredEnvironment": "OPENAI_API_KEY",
+                        },
+                    )
+                    return
+                self._json(HTTPStatus.OK, {"audio": result})
+                return
+
             payload = self._read_json()
             if path == "/api/meetings/extract":
                 transcript = str(payload.get("transcript") or "").strip()
@@ -153,6 +236,58 @@ class ShilingHandler(BaseHTTPRequestHandler):
             if path == "/api/tasks":
                 task = DATABASE.create_task(payload)
                 self._json(HTTPStatus.CREATED, {"task": task})
+                return
+            if path == "/api/meetings/compose":
+                documents = payload.get("documents") or []
+                audio_transcripts = payload.get("audioTranscripts") or []
+                if not documents and not audio_transcripts and not str(
+                    payload.get("manualText") or ""
+                ).strip():
+                    raise ValueError("请至少提供会议文档、录音转写或人工记录。")
+                transcript = compose_meeting_material(
+                    title=str(payload.get("title") or ""),
+                    meeting_date=str(payload.get("date") or ""),
+                    participants=payload.get("participants") or [],
+                    documents=documents,
+                    audio_transcripts=audio_transcripts,
+                    manual_text=str(payload.get("manualText") or ""),
+                )
+                local_extracted = extract_meeting(transcript)
+                extracted = (
+                    try_extract_with_llm(transcript, local_extracted)
+                    or local_extracted
+                )
+                extracted["meeting"]["title"] = (
+                    str(payload.get("title") or "").strip()
+                    or extracted["meeting"]["title"]
+                )
+                if payload.get("date"):
+                    extracted["meeting"]["date"] = str(payload["date"])
+                if payload.get("participants"):
+                    extracted["meeting"]["participants"] = [
+                        str(name).strip()
+                        for name in payload["participants"]
+                        if str(name).strip()
+                    ]
+                extracted["meeting"]["transcript"] = transcript
+                state = DATABASE.replace_state(extracted, preserve_history=True)
+                self._json(
+                    HTTPStatus.CREATED,
+                    {
+                        "engine": (
+                            "hybrid-semantic-llm"
+                            if extracted is not local_extracted
+                            else "local-semantic-rules"
+                        ),
+                        "state": state,
+                        "completeness": analyze_completeness(state),
+                        "sourceStats": {
+                            "documents": len(documents),
+                            "audio": len(audio_transcripts),
+                            "manualText": bool(str(payload.get("manualText") or "").strip()),
+                        },
+                    },
+                )
                 return
             comment_match = re.fullmatch(r"/api/tasks/([^/]+)/comments", path)
             if comment_match:
@@ -186,6 +321,16 @@ class ShilingHandler(BaseHTTPRequestHandler):
                 task_id = unquote(path.rsplit("/", 1)[-1])
                 task = DATABASE.update_task(task_id, self._read_json())
                 self._json(HTTPStatus.OK, {"task": task})
+                return
+            if path == "/api/meetings/current":
+                state = DATABASE.update_meeting(self._read_json())
+                self._json(
+                    HTTPStatus.OK,
+                    {
+                        "state": state,
+                        "completeness": analyze_completeness(state),
+                    },
+                )
                 return
             self._error_json(HTTPStatus.NOT_FOUND, "API endpoint not found.")
         except Exception as error:
@@ -312,6 +457,48 @@ class ShilingHandler(BaseHTTPRequestHandler):
         if not isinstance(payload, dict):
             raise ValueError("JSON body must be an object.")
         return payload
+
+    def _read_multipart(
+        self, *, max_bytes: int
+    ) -> tuple[dict[str, str], dict[str, dict[str, str | bytes]]]:
+        content_type = self.headers.get("Content-Type", "")
+        if not content_type.lower().startswith("multipart/form-data"):
+            raise ValueError("Content-Type must be multipart/form-data.")
+        length = int(self.headers.get("Content-Length", "0"))
+        if length <= 0:
+            raise ValueError("Empty upload body.")
+        if length > max_bytes:
+            raise ValueError(
+                f"Upload is too large. Maximum size is {max_bytes // (1024 * 1024)} MB."
+            )
+        raw = self.rfile.read(length)
+        message = BytesParser(policy=policy.default).parsebytes(
+            (
+                f"Content-Type: {content_type}\r\n"
+                "MIME-Version: 1.0\r\n\r\n"
+            ).encode("ascii")
+            + raw
+        )
+        if not message.is_multipart():
+            raise ValueError("Malformed multipart upload.")
+
+        fields: dict[str, str] = {}
+        files: dict[str, dict[str, str | bytes]] = {}
+        for part in message.iter_parts():
+            name = part.get_param("name", header="content-disposition")
+            if not name:
+                continue
+            filename = part.get_filename()
+            payload = part.get_payload(decode=True) or b""
+            if filename:
+                files[str(name)] = {
+                    "filename": filename,
+                    "contentType": part.get_content_type(),
+                    "content": payload,
+                }
+            else:
+                fields[str(name)] = payload.decode("utf-8", errors="replace")
+        return fields, files
 
     def _handle_error(self, error: Exception) -> None:
         if isinstance(error, KeyError):

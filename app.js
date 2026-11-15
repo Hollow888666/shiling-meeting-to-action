@@ -140,6 +140,30 @@ let state = loadState();
 let modalClosing = false;
 let draggingTaskId = null;
 let backendAvailable = false;
+let autoMode = createAutoModeState();
+let activeViewTransition = null;
+
+const AUDIO_EXTENSIONS = new Set([".mp3", ".wav", ".m4a", ".webm", ".ogg", ".aac", ".flac"]);
+const DOCUMENT_EXTENSIONS = new Set([".txt", ".md", ".csv", ".json", ".pdf", ".docx", ".pptx"]);
+
+function createAutoModeState() {
+  return {
+    phase: "input",
+    files: [],
+    documents: [],
+    audioTranscripts: [],
+    errors: [],
+    completeness: null,
+    finalDocument: "",
+    progressText: "",
+    title: "",
+    date: "",
+    participantsText: "",
+    manualText: "",
+    resolutions: {},
+    sourceStats: null,
+  };
+}
 
 function createDemoState() {
   return {
@@ -253,6 +277,41 @@ function getPublicAccess() {
     return sessionStorage.getItem(ACCESS_STORAGE_KEY) || "";
   } catch {
     return "";
+  }
+}
+
+async function apiUpload(path, formData, timeoutMs = 200000) {
+  if (!["http:", "https:"].includes(window.location.protocol)) {
+    throw new Error("Backend unavailable in file mode.");
+  }
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`/api${path}`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        ...(getPublicAccess() ? { "X-Shiling-Access": getPublicAccess() } : {}),
+      },
+      body: formData,
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(payload.error || `Upload failed: ${response.status}`);
+      error.code = payload.code;
+      error.payload = payload;
+      throw error;
+    }
+    backendAvailable = true;
+    return payload;
+  } catch (error) {
+    if (error.name === "AbortError") {
+      backendAvailable = false;
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
   }
 }
 
@@ -415,6 +474,8 @@ function renderApp() {
     root.innerHTML = renderMeetingView();
   } else if (state.view === "risks") {
     root.innerHTML = renderRisksView();
+  } else if (state.view === "auto") {
+    root.innerHTML = renderAutoView();
   } else {
     root.innerHTML = renderBoardView();
   }
@@ -423,7 +484,14 @@ function renderApp() {
 
 function renderWithTransition() {
   if (document.startViewTransition) {
-    document.startViewTransition(() => renderApp());
+    if (activeViewTransition) {
+      renderApp();
+      return;
+    }
+    activeViewTransition = document.startViewTransition(() => renderApp());
+    activeViewTransition.finished.finally(() => {
+      activeViewTransition = null;
+    });
   } else {
     renderApp();
   }
@@ -452,6 +520,7 @@ function updateChrome() {
       ? "Python API 与 SQLite 已连接"
       : "本地语义引擎，无需联网";
   }
+  document.body.classList.toggle("is-auto-mode", state.view === "auto");
 
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.view === state.view);
@@ -804,6 +873,545 @@ function renderRisksView() {
       </div>
     </section>
   `;
+}
+
+function renderAutoView() {
+  const completeness = autoMode.completeness;
+  const missing = completeness?.missing || [];
+  const requiredMissing = missing.filter((item) => item.severity === "required");
+  const config = autoButtonConfig(requiredMissing.length);
+  const activeStep = {
+    input: 0,
+    processing: 1,
+    missing: 2,
+    ready: 2,
+    final: 3,
+  }[autoMode.phase] ?? 0;
+
+  return `
+    <section class="view auto-view">
+      <div class="auto-hero">
+        <div>
+          <span class="auto-kicker">AI GUIDED WORKSPACE</span>
+          <h1>把会议材料交给 AI</h1>
+          <p>一次投入演示文档、录音或人工记录，依次完成转写、提取、完整性检查和最终文档。</p>
+        </div>
+        <div class="auto-backend-badge ${backendAvailable ? "is-online" : ""}">
+          <span class="status-light"></span>
+          <span>${backendAvailable ? "后端在线" : "等待后端"}</span>
+        </div>
+      </div>
+
+      <div class="auto-progress" aria-label="AI 处理进度">
+        ${["投入材料", "AI 生成", "完整性检查", "最终文档"]
+          .map(
+            (label, index) => `
+              <div class="auto-progress-step ${index < activeStep ? "is-complete" : ""} ${index === activeStep ? "is-active" : ""}">
+                <span>${index < activeStep ? "✓" : index + 1}</span>
+                <strong>${label}</strong>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+
+      <div class="auto-workspace">
+        <div class="auto-main">
+          ${renderAutoMain(requiredMissing)}
+        </div>
+        <aside class="auto-side">
+          ${renderAutoStatus()}
+        </aside>
+      </div>
+
+      <div class="auto-action-band">
+        <div>
+          <strong>${escapeHTML(config.instruction)}</strong>
+          <span>${escapeHTML(config.detail)}</span>
+        </div>
+        <button class="auto-primary" type="button" data-action="auto-primary" ${config.disabled ? "disabled" : ""}>
+          ${icon(config.icon)}
+          <span>${escapeHTML(config.label)}</span>
+        </button>
+      </div>
+    </section>
+  `;
+}
+
+function autoButtonConfig(requiredMissingCount) {
+  if (autoMode.phase === "processing") {
+    return {
+      label: "AI 正在处理",
+      instruction: autoMode.progressText || "AI 正在整理会议材料",
+      detail: "请保持页面打开，文档解析和录音转写可能需要一些时间。",
+      icon: "loader-circle",
+      disabled: true,
+    };
+  }
+  if (autoMode.phase === "missing") {
+    return {
+      label: "补齐并继续",
+      instruction: `还有 ${requiredMissingCount} 个必需项需要确认`,
+      detail: "填写下方缺失信息，AI 会重新检查完整性。",
+      icon: "list-checks",
+      disabled: false,
+    };
+  }
+  if (autoMode.phase === "ready") {
+    return {
+      label: "生成最终文档",
+      instruction: "会议信息已满足生成条件",
+      detail: "AI 将整理执行摘要、行动项、决策和风险。",
+      icon: "file-check-2",
+      disabled: false,
+    };
+  }
+  if (autoMode.phase === "final") {
+    return {
+      label: "下载最终文档",
+      instruction: "最终会议文档已经生成",
+      detail: "文档以 Markdown 格式导出，可直接归档或继续编辑。",
+      icon: "download",
+      disabled: false,
+    };
+  }
+  return {
+    label: "开始 AI 处理",
+    instruction: "先投入会议材料",
+    detail: "支持 TXT、MD、PDF、DOCX、PPTX 和常见音频文件。",
+    icon: "wand-sparkles",
+    disabled: false,
+  };
+}
+
+function renderAutoMain(requiredMissing) {
+  if (autoMode.phase === "processing") {
+    return `
+      <div class="auto-processing-panel">
+        <span class="auto-processing-orbit">${icon("sparkles")}</span>
+        <h2>${escapeHTML(autoMode.progressText || "AI 正在分析会议材料")}</h2>
+        <p>正在解析文档、识别发言、提取行动项并检查完整性。</p>
+        <div class="auto-processing-bar"><span></span></div>
+        ${renderAutoFileList()}
+      </div>
+    `;
+  }
+
+  if (autoMode.phase === "missing") {
+    return `
+      <div class="auto-section-head">
+        <div>
+          <span class="auto-kicker">COMPLETENESS CHECK</span>
+          <h2>补齐必要信息</h2>
+        </div>
+        <span class="auto-score">${autoMode.completeness?.score ?? 0}%</span>
+      </div>
+      <div class="auto-missing-list">
+        ${(autoMode.completeness?.missing || [])
+          .map((entry) => renderAutoMissingItem(entry))
+          .join("")}
+      </div>
+    `;
+  }
+
+  if (autoMode.phase === "ready") {
+    return `
+      <div class="auto-ready-panel">
+        <span class="auto-ready-mark">${icon("badge-check")}</span>
+        <h2>完整性检查通过</h2>
+        <p>会议标题、参会人、行动项负责人和截止时间已满足生成条件。</p>
+        <div class="auto-ready-metrics">
+          ${autoMetric("行动项", state.tasks.length)}
+          ${autoMetric("决策", state.decisions.length)}
+          ${autoMetric("风险", state.risks.length)}
+          ${autoMetric("完成度", `${autoMode.completeness?.score ?? 0}%`)}
+        </div>
+      </div>
+    `;
+  }
+
+  if (autoMode.phase === "final") {
+    return `
+      <div class="auto-section-head">
+        <div>
+          <span class="auto-kicker">FINAL DOCUMENT</span>
+          <h2>最终会议文档</h2>
+        </div>
+        <span class="auto-score">已生成</span>
+      </div>
+      <pre class="auto-document-preview">${escapeHTML(autoMode.finalDocument)}</pre>
+    `;
+  }
+
+  return `
+    <div class="auto-section-head">
+      <div>
+        <span class="auto-kicker">INPUT MATERIALS</span>
+        <h2>投入会议材料</h2>
+      </div>
+      <span class="auto-score">${autoMode.files.length} 个文件</span>
+    </div>
+    <label class="auto-dropzone" id="auto-dropzone">
+      <input id="auto-files" type="file" multiple accept=".txt,.md,.csv,.json,.pdf,.docx,.pptx,audio/*,.mp3,.wav,.m4a,.webm,.ogg,.aac,.flac">
+      <span>
+        ${icon("files")}
+        <strong>选择或拖入演示文档与录音</strong>
+        <small>文档：TXT MD CSV JSON PDF DOCX PPTX · 录音：MP3 WAV M4A WEBM</small>
+      </span>
+    </label>
+    ${renderAutoFileList()}
+    <div class="auto-form-grid">
+      <label class="field">
+        <span class="field-label">会议标题</span>
+        <input id="auto-title" type="text" value="${escapeHTML(autoMode.title)}" placeholder="例如：客户交付周会">
+      </label>
+      <label class="field">
+        <span class="field-label">会议日期</span>
+        <input id="auto-date" type="date" value="${escapeHTML(autoMode.date)}">
+      </label>
+      <label class="field full">
+        <span class="field-label">参会人员</span>
+        <input id="auto-participants" type="text" value="${escapeHTML(autoMode.participantsText)}" placeholder="用顿号或逗号分隔，例如：陈晨、林晓、周远">
+      </label>
+      <label class="field full">
+        <span class="field-label">人工补充记录</span>
+        <textarea id="auto-manual-text" placeholder="可粘贴会议文字、聊天记录或补充上下文">${escapeHTML(autoMode.manualText)}</textarea>
+      </label>
+    </div>
+  `;
+}
+
+function renderAutoFileList() {
+  if (!autoMode.files.length) {
+    return `<div class="auto-empty">尚未投入文件</div>`;
+  }
+  return `
+    <div class="auto-file-list">
+      ${autoMode.files
+        .map((file) => {
+          const ext = `.${file.name.split(".").pop()?.toLowerCase()}`;
+          const kind = AUDIO_EXTENSIONS.has(ext) ? "录音" : "文档";
+          return `
+            <div class="auto-file-item">
+              <span class="auto-file-icon">${icon(AUDIO_EXTENSIONS.has(ext) ? "audio-lines" : "file-text")}</span>
+              <div>
+                <strong>${escapeHTML(file.name)}</strong>
+                <small>${kind} · ${formatFileSize(file.size)}</small>
+              </div>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function renderAutoMissingItem(entry) {
+  const input = renderAutoMissingInput(entry);
+  return `
+    <div class="auto-missing-item ${entry.severity}">
+      <span class="auto-missing-icon">${icon(entry.severity === "required" ? "circle-alert" : "info")}</span>
+      <div class="auto-missing-copy">
+        <div class="entry-top">
+          <strong>${escapeHTML(entry.message)}</strong>
+          <span class="severity ${entry.severity === "required" ? "high" : "medium"}">${entry.severity === "required" ? "必需" : "建议"}</span>
+        </div>
+        <p>${escapeHTML(entry.suggestedAction)}</p>
+        ${input}
+      </div>
+    </div>
+  `;
+}
+
+function renderAutoMissingInput(entry) {
+  const current = autoMode.resolutions[entry.id] ?? missingDefaultValue(entry);
+  if (entry.field === "date" || entry.field === "due") {
+    return `<input class="auto-resolution-input" data-auto-resolution="${escapeHTML(entry.id)}" type="date" value="${escapeHTML(normalizeDate(current))}">`;
+  }
+  if (["title", "participants", "owner", "source"].includes(entry.field)) {
+    return `<input class="auto-resolution-input" data-auto-resolution="${escapeHTML(entry.id)}" type="text" value="${escapeHTML(current)}" placeholder="${escapeHTML(entry.suggestedAction)}">`;
+  }
+  return `<div class="auto-guidance">${escapeHTML(entry.suggestedAction)}</div>`;
+}
+
+function missingDefaultValue(entry) {
+  if (entry.entityType === "meeting") {
+    const mapping = {
+      title: state.meeting.title,
+      date: state.meeting.date,
+      participants: (state.meeting.participants || []).join("、"),
+      transcript: state.meeting.transcript,
+    };
+    return mapping[entry.field] || "";
+  }
+  const task = state.tasks.find((item) => item.id === entry.entityId);
+  return task?.[entry.field] || "";
+}
+
+function renderAutoStatus() {
+  const completeness = autoMode.completeness;
+  return `
+    <section class="auto-status-block">
+      <div class="auto-status-title">${icon("server-cog")}后端处理状态</div>
+      <div class="auto-capability-list">
+        ${autoCapability("document-extraction", "文档解析", autoMode.documents.length)}
+        ${autoCapability("audio-lines", "录音转写", autoMode.audioTranscripts.length)}
+        ${autoCapability("list-checks", "完整性检查", completeness ? `${completeness.score}%` : "待处理")}
+        ${autoCapability("file-check-2", "最终文档", autoMode.phase === "final" ? "已生成" : "待生成")}
+      </div>
+    </section>
+    <section class="auto-status-block">
+      <div class="auto-status-title">${icon("paperclip")}已投入材料</div>
+      <div class="auto-source-count">
+        <strong>${autoMode.files.length}</strong>
+        <span>个文件</span>
+      </div>
+      <div class="auto-source-detail">
+        <span>${autoMode.documents.length} 个文档已解析</span>
+        <span>${autoMode.audioTranscripts.length} 段录音已转写</span>
+        <span>${autoMode.manualText.trim() ? "包含人工补充" : "无人工补充"}</span>
+      </div>
+    </section>
+    ${
+      autoMode.errors.length
+        ? `
+          <section class="auto-status-block auto-error-block">
+            <div class="auto-status-title">${icon("triangle-alert")}需要处理</div>
+            ${autoMode.errors.map((error) => `<p>${escapeHTML(error)}</p>`).join("")}
+          </section>
+        `
+        : ""
+    }
+  `;
+}
+
+function autoCapability(iconName, label, value) {
+  return `
+    <div class="auto-capability">
+      <span>${icon(iconName)}${escapeHTML(label)}</span>
+      <strong>${escapeHTML(value)}</strong>
+    </div>
+  `;
+}
+
+function autoMetric(label, value) {
+  return `<div><strong>${escapeHTML(value)}</strong><span>${escapeHTML(label)}</span></div>`;
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function addAutoFiles(fileList) {
+  const incoming = Array.from(fileList || []);
+  for (const file of incoming) {
+    const ext = `.${file.name.split(".").pop()?.toLowerCase()}`;
+    if (!AUDIO_EXTENSIONS.has(ext) && !DOCUMENT_EXTENSIONS.has(ext)) {
+      autoMode.errors.push(`不支持的文件类型：${file.name}`);
+      continue;
+    }
+    if (
+      !autoMode.files.some(
+        (existing) => existing.name === file.name && existing.size === file.size,
+      )
+    ) {
+      autoMode.files.push(file);
+    }
+  }
+  renderWithTransition();
+}
+
+async function handleAutoPrimary() {
+  if (autoMode.phase === "processing") return;
+  if (autoMode.phase === "final") {
+    downloadFile(
+      `${safeFilename(state.meeting.title)}_最终会议文档.md`,
+      autoMode.finalDocument,
+      "text/markdown;charset=utf-8",
+    );
+    showToast("最终会议文档已下载。", "download");
+    return;
+  }
+  if (autoMode.phase === "input") {
+    if (!autoMode.files.length && !autoMode.manualText.trim()) {
+      showToast("请先投入演示文档、录音或人工记录。", "alert-circle");
+      return;
+    }
+    if (!backendAvailable) {
+      showToast("AI 自动模式需要后端服务。", "server-off");
+      return;
+    }
+    autoMode.errors = [];
+    autoMode.phase = "processing";
+    autoMode.progressText = "正在读取会议材料";
+    renderWithTransition();
+    await processAutoMaterials();
+    return;
+  }
+  if (autoMode.phase === "missing") {
+    await resolveAutoMissing();
+    return;
+  }
+  if (autoMode.phase === "ready") {
+    await loadFinalDocument();
+  }
+}
+
+async function processAutoMaterials() {
+  autoMode.documents = [];
+  autoMode.audioTranscripts = [];
+  try {
+    for (let index = 0; index < autoMode.files.length; index += 1) {
+      const file = autoMode.files[index];
+      const ext = `.${file.name.split(".").pop()?.toLowerCase()}`;
+      const isAudio = AUDIO_EXTENSIONS.has(ext);
+      autoMode.progressText = isAudio
+        ? `正在转写录音 ${index + 1}/${autoMode.files.length}：${file.name}`
+        : `正在解析文档 ${index + 1}/${autoMode.files.length}：${file.name}`;
+      renderWithTransition();
+      const formData = new FormData();
+      formData.append("file", file, file.name);
+      if (isAudio) {
+        formData.append("diarize", "true");
+        formData.append("language", "zh");
+        try {
+          const result = await apiUpload("/audio/transcribe", formData);
+          autoMode.audioTranscripts.push(result.audio);
+        } catch (error) {
+          if (error.code === "transcription_not_configured") {
+            autoMode.errors.push(
+              "录音转写未配置：请在本机设置 OPENAI_API_KEY 后重启后端。",
+            );
+          } else {
+            autoMode.errors.push(`${file.name} 转写失败：${error.message}`);
+          }
+        }
+      } else {
+        try {
+          const result = await apiUpload("/materials/extract", formData);
+          autoMode.documents.push(result.material);
+        } catch (error) {
+          autoMode.errors.push(`${file.name} 解析失败：${error.message}`);
+        }
+      }
+    }
+
+    if (
+      !autoMode.documents.length &&
+      !autoMode.audioTranscripts.length &&
+      !autoMode.manualText.trim()
+    ) {
+      autoMode.phase = "input";
+      renderWithTransition();
+      showToast("没有获得可用的会议文本，请查看右侧错误提示。", "alert-circle");
+      return;
+    }
+
+    autoMode.progressText = "正在生成会议记录与行动项";
+    renderWithTransition();
+    const participants = parseParticipantNames(autoMode.participantsText);
+    const payload = await apiRequest("/meetings/compose", {
+      method: "POST",
+      body: {
+        title: autoMode.title,
+        date: autoMode.date,
+        participants,
+        documents: autoMode.documents,
+        audioTranscripts: autoMode.audioTranscripts,
+        manualText: autoMode.manualText,
+      },
+    });
+    applyServerState(payload.state);
+    autoMode.completeness = payload.completeness;
+    autoMode.sourceStats = payload.sourceStats;
+    autoMode.title = state.meeting.title || autoMode.title;
+    autoMode.date = state.meeting.date || autoMode.date;
+    autoMode.participantsText =
+      (state.meeting.participants || []).join("、") || autoMode.participantsText;
+    autoMode.phase = payload.completeness?.ready ? "ready" : "missing";
+    autoMode.resolutions = {};
+    renderWithTransition();
+    showToast(
+      payload.completeness?.ready
+        ? "会议内容已生成，完整性检查通过。"
+        : "会议内容已生成，请补齐缺失项。",
+      payload.completeness?.ready ? "badge-check" : "list-checks",
+    );
+  } catch (error) {
+    autoMode.errors.push(error.message || "AI 处理失败。");
+    autoMode.phase = "input";
+    renderWithTransition();
+    showToast("AI 处理中断，请检查后端或材料格式。", "alert-circle");
+  }
+}
+
+async function resolveAutoMissing() {
+  const meetingPayload = {};
+  const taskPayloads = {};
+  for (const [id, value] of Object.entries(autoMode.resolutions)) {
+    const [entityType, entityId, field] = id.split(":");
+    if (!value) continue;
+    if (entityType === "meeting") {
+      if (field === "participants") {
+        meetingPayload.participants = parseParticipantNames(value);
+      } else {
+        meetingPayload[field] = value;
+      }
+    } else if (entityType === "task") {
+      taskPayloads[entityId] = taskPayloads[entityId] || {};
+      taskPayloads[entityId][field] = value;
+    }
+  }
+
+  try {
+    if (Object.keys(meetingPayload).length) {
+      const result = await apiRequest("/meetings/current", {
+        method: "PUT",
+        body: meetingPayload,
+      });
+      applyServerState(result.state);
+    }
+    for (const [taskId, payload] of Object.entries(taskPayloads)) {
+      await apiRequest(`/tasks/${encodeURIComponent(taskId)}`, {
+        method: "PUT",
+        body: payload,
+      });
+    }
+    const result = await apiRequest("/meetings/completeness");
+    applyServerState(result.state);
+    autoMode.completeness = result.completeness;
+    autoMode.resolutions = {};
+    autoMode.phase = result.completeness.ready ? "ready" : "missing";
+    renderWithTransition();
+    showToast(
+      result.completeness.ready ? "必需信息已补齐。" : "还有缺失项需要确认。",
+      result.completeness.ready ? "badge-check" : "circle-alert",
+    );
+  } catch (error) {
+    showToast(`缺失项保存失败：${error.message}`, "alert-circle");
+  }
+}
+
+async function loadFinalDocument() {
+  try {
+    const result = await apiRequest("/meetings/final-document");
+    autoMode.completeness = result.completeness;
+    autoMode.finalDocument = result.document;
+    autoMode.phase = "final";
+    renderWithTransition();
+    showToast("最终会议文档已生成。", "file-check-2");
+  } catch (error) {
+    showToast(`最终文档生成失败：${error.message}`, "alert-circle");
+  }
+}
+
+function parseParticipantNames(value) {
+  return String(value || "")
+    .split(/[、,，/\s]+/)
+    .map((name) => name.trim())
+    .filter(Boolean);
 }
 
 function activeTaskCount() {
@@ -1180,6 +1788,11 @@ function extractMeeting(text) {
 
   const sentences = [];
   parsedLines.forEach((line) => {
+    const body = line.body.trim();
+    if (body === title.trim() || /^(日期|参会)[：:]/.test(body)) return;
+    if (body.startsWith("#") || /^\[(演示文档|录音转写|人工补充)/.test(body)) {
+      return;
+    }
     line.body
       .split(/[。！？!?；;]+/)
       .map((part) => part.trim())
@@ -1289,12 +1902,21 @@ function cleanSentence(text) {
 
 function detectTask(text) {
   if (!text) return false;
+  if (text.startsWith("#") || /^\[(演示文档|录音转写|人工补充)/.test(text)) return false;
   if (/^(会议|日期|时间|地点|参会|主题)[：:]/.test(text)) return false;
   if (/上线门槛|不上线/.test(text) && !/负责|完成|整理|提交|准备|安排|拉通|补齐/.test(text)) return false;
   if (/设计稿会在.*给到/.test(text)) return false;
   const actionPattern =
     /负责|请[\p{L}\w]{2,4}|需要|完成|整理|输出|准备|对接|确认|提交|更新|安排|推进|测试|录制|发布|做一次|搭建|修复|核对|撰写|设计|开发|报名|邀请|跟进|补齐|拉通|同步|梳理|标记|验收|交付|导入|回滚|检查|落实|关闭/;
   if (!actionPattern.test(text)) return false;
+  if (
+    /风险|阻塞|担心|问题|冲突|不稳定|缺少|缺|依赖|来不及|延迟|未定|不确定|难点|故障|无法|低于|门槛|不上线/.test(
+      text,
+    ) &&
+    !/负责|请[\p{L}\w]{2,4}|完成|整理|补齐|提交|准备|安排|拉通|截止/.test(text)
+  ) {
+    return false;
+  }
   if (/^(决定|确定|统一|拍板|结论)/.test(text) && !/负责|完成|整理|提交|更新|安排/.test(text)) return false;
   return text.length >= 4;
 }
@@ -1508,6 +2130,7 @@ function handleClick(event) {
     }
     if (action === "copy-summary") copySummary();
     if (action === "export-md") exportMarkdown();
+    if (action === "auto-primary") handleAutoPrimary();
     if (action === "new-meeting") {
       closeModal(true);
       openImportModal();
@@ -1672,6 +2295,15 @@ function handleDeleteTask(event) {
 }
 
 function handleInput(event) {
+  if (event.target.id === "auto-title") autoMode.title = event.target.value;
+  if (event.target.id === "auto-date") autoMode.date = event.target.value;
+  if (event.target.id === "auto-participants") {
+    autoMode.participantsText = event.target.value;
+  }
+  if (event.target.id === "auto-manual-text") autoMode.manualText = event.target.value;
+  if (event.target.matches("[data-auto-resolution]")) {
+    autoMode.resolutions[event.target.dataset.autoResolution] = event.target.value;
+  }
   if (event.target.id === "task-search" || event.target.id === "mobile-task-search") {
     state.query = event.target.value;
     const id = event.target.id;
@@ -1686,6 +2318,11 @@ function handleInput(event) {
 }
 
 function handleFileChange(event) {
+  if (event.target.id === "auto-files") {
+    addAutoFiles(event.target.files);
+    event.target.value = "";
+    return;
+  }
   if (event.target.id !== "meeting-file") return;
   const file = event.target.files?.[0];
   if (!file) return;
@@ -1720,6 +2357,13 @@ function handleDragEnd(event) {
 }
 
 function handleDragOver(event) {
+  const autoDropzone = event.target.closest("#auto-dropzone");
+  if (autoDropzone) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    autoDropzone.classList.add("is-dragover");
+    return;
+  }
   const column = event.target.closest(".board-column");
   if (!column) return;
   event.preventDefault();
@@ -1728,6 +2372,13 @@ function handleDragOver(event) {
 }
 
 function handleDrop(event) {
+  const autoDropzone = event.target.closest("#auto-dropzone");
+  if (autoDropzone) {
+    event.preventDefault();
+    autoDropzone.classList.remove("is-dragover");
+    addAutoFiles(event.dataTransfer.files);
+    return;
+  }
   const column = event.target.closest(".board-column");
   if (!column) return;
   event.preventDefault();
@@ -1742,6 +2393,11 @@ function handleDrop(event) {
 }
 
 function handleDragLeave(event) {
+  const autoDropzone = event.target.closest("#auto-dropzone");
+  if (autoDropzone && !autoDropzone.contains(event.relatedTarget)) {
+    autoDropzone.classList.remove("is-dragover");
+    return;
+  }
   const column = event.target.closest(".board-column");
   if (!column) return;
   if (!column.contains(event.relatedTarget)) column.classList.remove("is-drop-target");
