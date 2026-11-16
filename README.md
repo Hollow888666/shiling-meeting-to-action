@@ -28,10 +28,10 @@
 - 将决策或风险一键转为待确认任务。
 - 导出 Markdown 会议报告和 JSON 数据。
 - 使用浏览器本地存储保留演示进度。
-- 完全离线运行，原文不上传。
+- 支持离线单机运行，原文无需上传；配置外部模型后，会议内容会发送给模型服务。
 - HTTP 服务模式下自动连接 Python 后端，使用 SQLite 持久化。
 - 后端保留会议历史，支持切换旧会议和新建会议。
-- 任务评论、审计日志、负责人负载分析、逾期统计和服务端搜索。
+- 任务详情支持评论；后端提供活动记录、负责人负载分析、逾期统计和服务端搜索。
 - 支持可选 OpenAI Chat Completions 兼容模型，提取失败时自动回退本地规则。
 
 ## 启动
@@ -53,7 +53,7 @@ http://127.0.0.1:8765
 如果需要通过本地 HTTP 服务演示：
 
 ```powershell
-D:\Python\python.exe server.py --host 0.0.0.0 --port 8765
+python server.py --host 0.0.0.0 --port 8765
 ```
 
 SQLite 数据文件位于 `data/shiling.db`。
@@ -101,6 +101,8 @@ SQLite 数据文件位于 `data/shiling.db`。
 | POST | `/api/reset` | 恢复演示数据 |
 | GET | `/api/export/json` | 导出当前数据 |
 
+统计、活动记录、搜索和 JSON 导出接口均支持可选的 `meetingId` 查询参数，例如 `/api/analytics?meetingId=会议ID`；不指定时使用服务器的默认会议。任务评论在后端模式下可从任务详情查看和添加。
+
 ## 演示流程
 
 1. 打开任务看板，展示行动项、负责人、截止时间和风险指标。
@@ -114,11 +116,14 @@ SQLite 数据文件位于 `data/shiling.db`。
 ## 验证
 
 ```powershell
-D:\Python\python.exe tests\smoke_test.py
-D:\Python\python.exe tests\backend_core_test.py
-D:\Python\python.exe tests\visual_check.py
-D:\Python\python.exe tests\backend_ui_test.py
-D:\Python\python.exe tests\standalone_check.py
+python tests\smoke_test.py
+python tests\backend_core_test.py
+python tests\backend_api_test.py
+python tests\test_backend_regression.py
+python tests\test_backend_http.py
+python tests\visual_check.py
+python tests\backend_ui_test.py
+python tests\standalone_check.py
 ```
 
 `smoke_test.py` 覆盖搜索、负责人筛选、编辑、新建、拖拽、风险转任务和报告导出。
@@ -131,6 +136,8 @@ D:\Python\python.exe tests\standalone_check.py
 
 `standalone_check.py` 验证单文件离线版在手机宽度下可运行。
 
+浏览器测试需要安装 Playwright；Windows 上使用已安装的 Microsoft Edge。Linux 可运行 `python -m playwright install chromium` 安装测试浏览器。GitHub Actions 会运行核心、接口和主要浏览器测试。
+
 ## 架构
 
 ```text
@@ -139,7 +146,11 @@ D:\Python\python.exe tests\standalone_check.py
   -> 离线模式：本地语义提取 -> localStorage
 ```
 
-在线模式优先使用后端数据；如果后端断开，前端自动退回本机存储，保留演示能力。
+在线模式优先使用后端数据。每个浏览器独立记住所选会议；保存失败时修改仅保存在本机，不会自动同步，重新打开时也不会自动覆盖。请及时导出 JSON 备份；要放弃本机未同步修改，可通过“恢复演示数据”确认后创建一份新的演示会议。该操作会保留服务器上的原有会议。离线单机模式的数据仅保存在当前浏览器。
+
+保存失败后也可以通过会议切换入口重新读取服务器数据，确认后将放弃本机未同步修改。多位访客同时编辑同一任务时，系统会检测版本冲突并保留未同步的本机修改供导出；本项目面向学习和演示，不提供完整的多人账号和权限管理。
+
+模型提取请求最长等待 60 秒，超时后请先检查会议列表再重试，因为服务器可能仍在处理。超过 12000 字符的会议使用本地规则处理，避免模型只处理前半段。配置外部模型后，会议内容会发送给该模型服务。
 
 ## 可选 LLM 提取
 

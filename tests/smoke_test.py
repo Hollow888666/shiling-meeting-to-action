@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 
 from playwright.sync_api import expect, sync_playwright
 
@@ -9,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     errors = []
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(channel="msedge", headless=True)
+        browser = playwright.chromium.launch(channel="msedge" if sys.platform == "win32" else None, headless=True)
         page = browser.new_page(viewport={"width": 1440, "height": 1000})
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.on(

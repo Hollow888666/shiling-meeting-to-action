@@ -187,6 +187,30 @@ svg {
   height: 11px;
 }
 
+#task-comments {
+  gap: 8px;
+}
+
+#comment-list {
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.task-comment {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+
+.task-comment small {
+  color: var(--muted);
+}
+
+.task-comment p {
+  margin: 5px 0 0;
+  white-space: pre-wrap;
+}
+
 .primary-nav {
   display: grid;
   gap: 4px;

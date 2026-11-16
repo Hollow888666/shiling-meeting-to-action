@@ -9,8 +9,9 @@ $localUrl = "http://127.0.0.1:$port"
 
 $listener = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $listener) {
+    $python = Get-Command python.exe -ErrorAction Stop
     Start-Process `
-        -FilePath "D:\Python\python.exe" `
+        -FilePath $python.Source `
         -ArgumentList @("server.py", "--host", "0.0.0.0", "--port", "$port") `
         -WorkingDirectory $root `
         -WindowStyle Hidden

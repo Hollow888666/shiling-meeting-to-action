@@ -21,8 +21,9 @@ $listener = Get-NetTCPConnection -LocalPort $publicPort -State Listen -ErrorActi
     Select-Object -First 1
 if (-not $listener) {
     $env:SHILING_ACCESS_CODE = $code
+    $python = Get-Command python.exe -ErrorAction Stop
     Start-Process `
-        -FilePath "D:\Python\python.exe" `
+        -FilePath $python.Source `
         -ArgumentList @("server.py", "--host", "127.0.0.1", "--port", "$publicPort") `
         -WorkingDirectory $root `
         -WindowStyle Hidden
