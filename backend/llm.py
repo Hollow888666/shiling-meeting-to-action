@@ -6,6 +6,7 @@ import re
 import urllib.error
 import urllib.request
 import uuid
+from datetime import date
 from typing import Any
 
 
@@ -20,6 +21,9 @@ def try_extract_with_llm(
     transcript: str, fallback: dict[str, Any]
 ) -> dict[str, Any] | None:
     if not is_configured():
+        return None
+    # Never silently omit the end of a meeting from model extraction.
+    if len(transcript) > 12000:
         return None
 
     base_url = os.getenv("SHILING_LLM_BASE_URL", "").strip().rstrip("/")
@@ -49,19 +53,19 @@ def try_extract_with_llm(
                     "不要虚构原文中不存在的负责人或日期。"
                 ),
             },
-            {"role": "user", "content": transcript[:12000]},
+            {"role": "user", "content": transcript},
         ],
     }
     headers = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
-    request = urllib.request.Request(
-        endpoint,
-        data=json.dumps(payload, ensure_ascii=True).encode("ascii"),
-        headers=headers,
-        method="POST",
-    )
     try:
+        request = urllib.request.Request(
+            endpoint,
+            data=json.dumps(payload, ensure_ascii=True).encode("ascii"),
+            headers=headers,
+            method="POST",
+        )
         with urllib.request.urlopen(request, timeout=45) as response:
             raw = json.loads(response.read().decode("utf-8"))
         content = raw["choices"][0]["message"]["content"]
@@ -76,7 +80,12 @@ def try_extract_with_llm(
     except (OSError, KeyError, IndexError, TypeError, ValueError, urllib.error.URLError):
         return None
 
-    tasks = normalize_tasks(parsed.get("tasks"))
+    if not isinstance(parsed, dict):
+        return None
+    try:
+        tasks = normalize_tasks(parsed.get("tasks"))
+    except (TypeError, ValueError):
+        return None
     if not tasks:
         return None
     return {
@@ -99,12 +108,19 @@ def normalize_tasks(value: Any) -> list[dict[str, Any]]:
             continue
         priority = str(item.get("priority") or "medium").lower()
         status = str(item.get("status") or "todo").lower()
+        due = str(item.get("due") or "").strip()
+        try:
+            due = date.fromisoformat(due).isoformat() if due else ""
+        except ValueError:
+            due = ""
+        if not isinstance(item.get("tags", []), list):
+            raise ValueError("Invalid model tags")
         tasks.append(
             {
                 "id": f"t_{uuid.uuid4().hex[:12]}",
                 "title": title[:120],
                 "owner": str(item.get("owner") or "").strip()[:30],
-                "due": str(item.get("due") or "").strip()[:10],
+                "due": due,
                 "priority": priority if priority in {"high", "medium", "low"} else "medium",
                 "status": status
                 if status in {"backlog", "todo", "doing", "done"}

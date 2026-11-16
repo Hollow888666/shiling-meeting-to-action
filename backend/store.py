@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import copy
 import sqlite3
 import uuid
 from contextlib import contextmanager
@@ -9,6 +10,10 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from .seed import DEMO_STATE
+
+
+class ConflictError(Exception):
+    pass
 
 
 class Database:
@@ -105,6 +110,9 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_comments_task ON comments(task_id);
                 """
             )
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(tasks)")}
+            if "version" not in columns:
+                connection.execute("ALTER TABLE tasks ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
 
     def seed_if_empty(self) -> None:
         with self.connection() as connection:
@@ -146,7 +154,7 @@ class Database:
                 (meeting_id,),
             ).fetchone()
             if meeting is None:
-                raise RuntimeError("No meeting data available.")
+                raise KeyError(meeting_id)
             tasks = connection.execute(
                 """
                 SELECT * FROM tasks
@@ -249,7 +257,7 @@ class Database:
                     "risks": len(state.get("risks", [])),
                 },
             )
-        return self.get_state()
+        return self.get_state(meeting_id)
 
     def list_meetings(self) -> dict[str, Any]:
         with self.connection() as connection:
@@ -289,13 +297,6 @@ class Database:
             ).fetchone()
             if valid is None:
                 raise KeyError(meeting_id)
-            connection.execute(
-                """
-                INSERT INTO settings(key, value) VALUES ('active_meeting_id', ?)
-                ON CONFLICT(key) DO UPDATE SET value = excluded.value
-                """,
-                (meeting_id,),
-            )
             self._log_activity(
                 connection,
                 meeting_id,
@@ -379,7 +380,9 @@ class Database:
         )
 
     def create_task(self, payload: dict[str, Any]) -> dict[str, Any]:
-        meeting_id = self.current_meeting_id()
+        meeting_id = payload.get("meetingId") or self.current_meeting_id()
+        self.get_state(meeting_id)
+        self._validate_task(payload, creating=True)
         task = {
             "id": payload.get("id") or f"t_{uuid.uuid4().hex[:12]}",
             "title": payload.get("title") or "未命名任务",
@@ -390,6 +393,7 @@ class Database:
             "source": payload.get("source") or "手动创建",
             "notes": payload.get("notes") or "",
             "tags": payload.get("tags") or ["手动创建"],
+            "version": 1,
         }
         with self.connection() as connection:
             self._insert_task(connection, meeting_id, task)
@@ -405,10 +409,14 @@ class Database:
         return task
 
     def update_task(self, task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        self._validate_task(payload)
         with self.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             row = connection.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
             if row is None:
                 raise KeyError(task_id)
+            if "version" in payload and payload["version"] != row["version"]:
+                raise ConflictError("Task was changed by another user.")
             merged = {
                 **self._task_row(row),
                 **{
@@ -430,7 +438,7 @@ class Database:
                 """
                 UPDATE tasks
                 SET title = ?, owner = ?, due = ?, priority = ?, status = ?,
-                    source = ?, notes = ?, tags_json = ?
+                    source = ?, notes = ?, tags_json = ?, version = version + 1
                 WHERE id = ?
                 """,
                 (
@@ -445,6 +453,7 @@ class Database:
                     task_id,
                 ),
             )
+            merged["version"] = row["version"] + 1
             self._touch_meeting(connection, row["meeting_id"])
             changed = [key for key in payload if key in merged and payload[key] != self._task_row(row).get(key)]
             self._log_activity(
@@ -458,13 +467,39 @@ class Database:
             )
         return merged
 
-    def delete_task(self, task_id: str) -> None:
+    @staticmethod
+    def _validate_task(payload: dict[str, Any], creating: bool = False) -> None:
+        for key, limit in (("title", 120), ("owner", 30), ("notes", 2000), ("source", 1000)):
+            if key in payload and (not isinstance(payload[key], str) or len(payload[key]) > limit):
+                raise ValueError(f"Invalid {key}.")
+        if (creating or "title" in payload) and not str(payload.get("title") or "").strip():
+            raise ValueError("Task title is required.")
+        for key, choices in (("status", {"backlog", "todo", "doing", "done"}), ("priority", {"high", "medium", "low"})):
+            if key in payload and (not isinstance(payload[key], str) or payload[key] not in choices):
+                raise ValueError(f"Invalid {key}.")
+        if "version" in payload and (type(payload["version"]) is not int or payload["version"] < 1):
+            raise ValueError("Invalid version.")
+        if "due" in payload and not isinstance(payload["due"], str):
+            raise ValueError("Invalid due date.")
+        if "due" in payload and payload["due"]:
+            try:
+                if date.fromisoformat(payload["due"]).isoformat() != payload["due"]:
+                    raise ValueError
+            except (TypeError, ValueError):
+                raise ValueError("Invalid due date.") from None
+        if "tags" in payload and (not isinstance(payload["tags"], list) or len(payload["tags"]) > 20 or any(not isinstance(tag, str) or len(tag) > 30 for tag in payload["tags"])):
+            raise ValueError("Invalid tags.")
+
+    def delete_task(self, task_id: str, version: int | None = None) -> None:
         with self.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
-                "SELECT meeting_id FROM tasks WHERE id = ?", (task_id,)
+                "SELECT meeting_id, version FROM tasks WHERE id = ?", (task_id,)
             ).fetchone()
             if row is None:
                 raise KeyError(task_id)
+            if version is not None and version != row["version"]:
+                raise ConflictError("Task was changed by another user.")
             title = connection.execute(
                 "SELECT title FROM tasks WHERE id = ?", (task_id,)
             ).fetchone()["title"]
@@ -480,10 +515,15 @@ class Database:
             )
 
     def reset_demo(self) -> dict[str, Any]:
-        return self.replace_state(DEMO_STATE, preserve_history=False)
+        demo = copy.deepcopy(DEMO_STATE)
+        demo["meeting"]["id"] = f"m_{uuid.uuid4().hex[:12]}"
+        for kind, prefix in (("tasks", "t"), ("decisions", "d"), ("risks", "r")):
+            for item in demo[kind]:
+                item["id"] = f"{prefix}_{uuid.uuid4().hex[:12]}"
+        return self.replace_state(demo, preserve_history=True)
 
-    def list_activity(self, limit: int = 50) -> dict[str, Any]:
-        meeting_id = self.current_meeting_id()
+    def list_activity(self, limit: int = 50, meeting_id: str | None = None) -> dict[str, Any]:
+        meeting_id = self.get_state(meeting_id)["meeting"]["id"]
         limit = max(1, min(int(limit), 200))
         with self.connection() as connection:
             rows = connection.execute(
@@ -517,6 +557,8 @@ class Database:
         body = body.strip()
         if not body:
             raise ValueError("Comment body is required.")
+        if len(body) > 2000 or len(author) > 30:
+            raise ValueError("Comment is too long.")
         with self.connection() as connection:
             task = connection.execute(
                 "SELECT meeting_id, title FROM tasks WHERE id = ?", (task_id,)
@@ -526,7 +568,7 @@ class Database:
             comment = {
                 "id": f"c_{uuid.uuid4().hex[:12]}",
                 "taskId": task_id,
-                "author": (author or "匿名").strip(),
+                "author": author.strip() or "匿名",
                 "body": body,
                 "createdAt": datetime.now().isoformat(timespec="seconds"),
             }
@@ -575,8 +617,8 @@ class Database:
             "comments": [dict(row) for row in rows],
         }
 
-    def analytics(self) -> dict[str, Any]:
-        state = self.get_state()
+    def analytics(self, meeting_id: str | None = None) -> dict[str, Any]:
+        state = self.get_state(meeting_id)
         tasks = state["tasks"]
         today = date.today()
         soon = today + timedelta(days=3)
@@ -644,11 +686,11 @@ class Database:
             "comments": comment_count,
         }
 
-    def search(self, query: str, limit: int = 50) -> dict[str, Any]:
+    def search(self, query: str, limit: int = 50, meeting_id: str | None = None) -> dict[str, Any]:
+        state = self.get_state(meeting_id)
         query = query.strip().lower()
         if not query:
             return {"query": query, "tasks": [], "decisions": [], "risks": []}
-        state = self.get_state()
         tasks = [
             task
             for task in state["tasks"]
@@ -708,6 +750,7 @@ class Database:
     def _task_row(row: sqlite3.Row) -> dict[str, Any]:
         return {
             "id": row["id"],
+            "version": row["version"],
             "title": row["title"],
             "owner": row["owner"],
             "due": row["due"],

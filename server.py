@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hmac
 import json
+import logging
 import mimetypes
 import os
 import re
@@ -25,7 +26,7 @@ from backend.completeness import (
 from backend.documents import extract_document
 from backend.llm import is_configured as llm_is_configured
 from backend.llm import try_extract_with_llm
-from backend.store import Database
+from backend.store import ConflictError, Database
 from backend.transcription import (
     TranscriptionNotConfigured,
     engine_name as transcription_engine,
@@ -37,6 +38,7 @@ from backend.transcription import (
 ROOT = Path(__file__).resolve().parent
 DATABASE_PATH = Path(
     os.getenv("SHILING_DATABASE_PATH", "").strip()
+    or os.getenv("SHILING_DB_PATH", "").strip()
     or ROOT / "data" / "shiling.db"
 )
 if not DATABASE_PATH.is_absolute():
@@ -65,7 +67,7 @@ class ShilingHandler(BaseHTTPRequestHandler):
         self.send_response(HTTPStatus.NO_CONTENT)
         self._cors_headers()
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Shiling-Access")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Shiling-Access, If-Match")
         self.end_headers()
 
     def do_GET(self) -> None:
@@ -84,6 +86,7 @@ class ShilingHandler(BaseHTTPRequestHandler):
             else:
                 self._serve_login()
             return
+        meeting_id = (query.get("meetingId") or [None])[0]
         if path == "/api/health":
             self._json(
                 HTTPStatus.OK,
@@ -116,7 +119,10 @@ class ShilingHandler(BaseHTTPRequestHandler):
             )
             return
         if path == "/api/state":
-            self._json(HTTPStatus.OK, DATABASE.get_state())
+            try:
+                self._json(HTTPStatus.OK, DATABASE.get_state(meeting_id))
+            except KeyError:
+                self._error_json(HTTPStatus.NOT_FOUND, "Meeting not found.")
             return
         if path == "/api/meetings":
             self._json(HTTPStatus.OK, DATABASE.list_meetings())
@@ -143,26 +149,41 @@ class ShilingHandler(BaseHTTPRequestHandler):
             )
             return
         if path == "/api/analytics":
-            self._json(HTTPStatus.OK, DATABASE.analytics())
+            try:
+                self._json(HTTPStatus.OK, DATABASE.analytics(meeting_id))
+            except KeyError as error:
+                self._handle_error(error)
             return
         if path == "/api/activity":
             try:
                 limit = int((query.get("limit") or ["50"])[0])
             except ValueError:
                 limit = 50
-            self._json(HTTPStatus.OK, DATABASE.list_activity(limit))
+            try:
+                self._json(HTTPStatus.OK, DATABASE.list_activity(limit, meeting_id))
+            except KeyError as error:
+                self._handle_error(error)
             return
         if path == "/api/search":
             search_query = (query.get("q") or [""])[0]
-            self._json(HTTPStatus.OK, DATABASE.search(search_query))
+            try:
+                self._json(HTTPStatus.OK, DATABASE.search(search_query, meeting_id=meeting_id))
+            except KeyError as error:
+                self._handle_error(error)
             return
         comment_match = re.fullmatch(r"/api/tasks/([^/]+)/comments", path)
         if comment_match:
             task_id = unquote(comment_match.group(1))
-            self._json(HTTPStatus.OK, DATABASE.list_comments(task_id))
+            try:
+                self._json(HTTPStatus.OK, DATABASE.list_comments(task_id))
+            except KeyError as error:
+                self._handle_error(error)
             return
         if path == "/api/export/json":
-            self._json(HTTPStatus.OK, DATABASE.get_state())
+            try:
+                self._json(HTTPStatus.OK, DATABASE.get_state(meeting_id))
+            except KeyError as error:
+                self._handle_error(error)
             return
         if path.startswith("/api/"):
             self._error_json(HTTPStatus.NOT_FOUND, "API endpoint not found.")
@@ -219,7 +240,9 @@ class ShilingHandler(BaseHTTPRequestHandler):
 
             payload = self._read_json()
             if path == "/api/meetings/extract":
-                transcript = str(payload.get("transcript") or "").strip()
+                if not isinstance(payload.get("transcript"), str):
+                    raise ValueError("Meeting transcript must be text.")
+                transcript = payload["transcript"].strip()
                 if len(transcript) < 30:
                     raise ValueError("Meeting transcript is too short.")
                 local_extracted = extract_meeting(transcript)
@@ -300,10 +323,12 @@ class ShilingHandler(BaseHTTPRequestHandler):
             comment_match = re.fullmatch(r"/api/tasks/([^/]+)/comments", path)
             if comment_match:
                 task_id = unquote(comment_match.group(1))
+                if not isinstance(payload.get("body"), str) or not isinstance(payload.get("author", ""), str):
+                    raise ValueError("Comment author and body must be text.")
                 comment = DATABASE.add_comment(
                     task_id,
-                    str(payload.get("author") or ""),
-                    str(payload.get("body") or ""),
+                    payload.get("author", ""),
+                    payload["body"],
                 )
                 self._json(HTTPStatus.CREATED, {"comment": comment})
                 return
@@ -325,8 +350,9 @@ class ShilingHandler(BaseHTTPRequestHandler):
         if not self._authorized(api=True):
             return
         try:
-            if path.startswith("/api/tasks/"):
-                task_id = unquote(path.rsplit("/", 1)[-1])
+            task_match = re.fullmatch(r"/api/tasks/([^/]+)", path)
+            if task_match:
+                task_id = unquote(task_match.group(1))
                 task = DATABASE.update_task(task_id, self._read_json())
                 self._json(HTTPStatus.OK, {"task": task})
                 return
@@ -349,9 +375,11 @@ class ShilingHandler(BaseHTTPRequestHandler):
         if not self._authorized(api=True):
             return
         try:
-            if path.startswith("/api/tasks/"):
-                task_id = unquote(path.rsplit("/", 1)[-1])
-                DATABASE.delete_task(task_id)
+            task_match = re.fullmatch(r"/api/tasks/([^/]+)", path)
+            if task_match:
+                task_id = unquote(task_match.group(1))
+                version = self.headers.get("If-Match")
+                DATABASE.delete_task(task_id, int(version) if version is not None else None)
                 self._json(HTTPStatus.OK, {"deleted": True, "id": task_id})
                 return
             self._error_json(HTTPStatus.NOT_FOUND, "API endpoint not found.")
@@ -455,7 +483,7 @@ class ShilingHandler(BaseHTTPRequestHandler):
 
     def _read_json(self) -> dict:
         length = int(self.headers.get("Content-Length", "0"))
-        if length > 2 * 1024 * 1024:
+        if length < 0 or length > 2 * 1024 * 1024:
             raise ValueError("Request body is too large.")
         raw = self.rfile.read(length) if length else b"{}"
         try:
@@ -509,11 +537,14 @@ class ShilingHandler(BaseHTTPRequestHandler):
         return fields, files
 
     def _handle_error(self, error: Exception) -> None:
-        if isinstance(error, KeyError):
+        if isinstance(error, ConflictError):
+            self._error_json(HTTPStatus.CONFLICT, str(error))
+        elif isinstance(error, KeyError):
             self._error_json(HTTPStatus.NOT_FOUND, "Resource not found.")
         elif isinstance(error, ValueError):
             self._error_json(HTTPStatus.BAD_REQUEST, str(error))
         else:
+            logging.exception("Unhandled request error", exc_info=error)
             self._error_json(HTTPStatus.INTERNAL_SERVER_ERROR, "Internal server error.")
 
     def _error_json(self, status: HTTPStatus, message: str) -> None:
@@ -533,7 +564,8 @@ class ShilingHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
 
     def log_message(self, format: str, *args) -> None:
-        print(f"[{self.log_date_time_string()}] {self.address_string()} {format % args}")
+        message = re.sub(r"(?i)([?&]access=)[^&\s]*", r"\1[redacted]", format % args)
+        print(f"[{self.log_date_time_string()}] {self.address_string()} {message}")
 
 
 def local_addresses(port: int) -> list[str]:

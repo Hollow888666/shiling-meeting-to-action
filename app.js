@@ -231,7 +231,7 @@ async function apiRequest(path, options = {}) {
   }
 
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 6000);
+  const timeout = window.setTimeout(() => controller.abort(), options.timeout || 6000);
   const request = {
     method: options.method || "GET",
     headers: {
@@ -250,12 +250,14 @@ async function apiRequest(path, options = {}) {
     const response = await fetch(`/api${path}`, request);
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(payload.error || `API request failed: ${response.status}`);
+      const error = new Error(payload.error || `API request failed: ${response.status}`);
+      error.status = response.status;
+      throw error;
     }
     backendAvailable = true;
     return payload;
   } catch (error) {
-    backendAvailable = false;
+    if (!error.status) backendAvailable = false;
     throw error;
   } finally {
     window.clearTimeout(timeout);
@@ -333,13 +335,27 @@ function applyServerState(serverState) {
     risks: Array.isArray(serverState.risks) ? serverState.risks : [],
     ...preferences,
   };
+  if (state.meeting.id) localStorage.setItem("shiling_meeting_id", state.meeting.id);
   saveState();
 }
 
 async function initializeApp() {
   if (["http:", "https:"].includes(window.location.protocol)) {
+    if (localStorage.getItem("shiling_unsynced") === "1") {
+      backendAvailable = false;
+      renderApp();
+      showToast("存在未同步的本机修改，请先导出 JSON 备份。", "alert-circle");
+      return;
+    }
     try {
-      const serverState = await apiRequest("/state");
+      const meetingId = localStorage.getItem("shiling_meeting_id");
+      let serverState;
+      try {
+        serverState = await apiRequest(meetingId ? `/state?meetingId=${encodeURIComponent(meetingId)}` : "/state");
+      } catch (error) {
+        if (!meetingId) throw error;
+        serverState = await apiRequest("/state");
+      }
       applyServerState(serverState);
       backendAvailable = true;
     } catch {
@@ -349,34 +365,52 @@ async function initializeApp() {
   renderApp();
 }
 
-function syncTask(task, isNew) {
-  if (!backendAvailable) return;
-  const request = isNew
-    ? apiRequest("/tasks", { method: "POST", body: task })
-    : apiRequest(`/tasks/${encodeURIComponent(task.id)}`, { method: "PUT", body: task });
-  request.catch(() => {
-    showToast("后端连接已断开，当前修改保存在本机。", "cloud-off");
+let pendingWrites = 0;
+let writeFailed = false;
+function trackWrite(request) {
+  if (!["http:", "https:"].includes(window.location.protocol)) return;
+  localStorage.setItem("shiling_unsynced", "1");
+  if (!request) {
+    writeFailed = true;
+    showToast("修改仅保存在本机，请导出 JSON 备份。", "cloud-off");
+    return;
+  }
+  pendingWrites += 1;
+  request.then((payload) => {
+    if (payload?.task?.version) {
+      const current = state.tasks.find((item) => item.id === payload.task.id);
+      if (current) current.version = payload.task.version;
+      saveState();
+    }
+    pendingWrites -= 1;
+    if (!pendingWrites && !writeFailed) localStorage.removeItem("shiling_unsynced");
+  }).catch((error) => {
+    pendingWrites -= 1;
+    writeFailed = true;
+    showToast(error.status === 409 ? "任务已被其他人修改，本机修改已保留，请导出 JSON 备份。" : "保存失败，修改仅保存在本机，请导出 JSON 备份。", "cloud-off");
     updateChrome();
   });
 }
 
-function syncDelete(taskId) {
-  if (!backendAvailable) return;
-  apiRequest(`/tasks/${encodeURIComponent(taskId)}`, { method: "DELETE" }).catch(() => {
-    showToast("后端连接已断开，删除只保存在本机。", "cloud-off");
-    updateChrome();
-  });
+function syncTask(task, isNew) {
+  if (!backendAvailable) return trackWrite(null);
+  const request = isNew
+    ? apiRequest("/tasks", { method: "POST", body: { ...task, meetingId: state.meeting.id } })
+    : apiRequest(`/tasks/${encodeURIComponent(task.id)}`, { method: "PUT", body: task });
+  trackWrite(request);
+}
+
+function syncDelete(task) {
+  if (!backendAvailable) return trackWrite(null);
+  trackWrite(apiRequest(`/tasks/${encodeURIComponent(task.id)}`, { method: "DELETE", headers: task.version ? { "If-Match": String(task.version) } : {} }));
 }
 
 function syncTaskStatus(task) {
-  if (!backendAvailable) return;
-  apiRequest(`/tasks/${encodeURIComponent(task.id)}`, {
+  if (!backendAvailable) return trackWrite(null);
+  trackWrite(apiRequest(`/tasks/${encodeURIComponent(task.id)}`, {
     method: "PUT",
-    body: { status: task.status },
-  }).catch(() => {
-    showToast("后端连接已断开，状态仅保存在本机。", "cloud-off");
-    updateChrome();
-  });
+    body: { status: task.status, version: task.version },
+  }));
 }
 
 function icon(name) {
@@ -1474,6 +1508,7 @@ async function loadMeetingList() {
       ],
     };
   }
+  payload.activeId = state.meeting.id;
   renderMeetingList(payload);
 }
 
@@ -1503,6 +1538,21 @@ function renderMeetingList(payload) {
 }
 
 async function activateMeeting(meetingId) {
+  if (localStorage.getItem("shiling_unsynced") === "1") {
+    if (!window.confirm("有未同步的本机修改。请先导出 JSON 备份。确定放弃本机修改并重新读取服务器上的会议吗？")) return;
+    try {
+      const serverState = await apiRequest(`/state?meetingId=${encodeURIComponent(meetingId)}`);
+      localStorage.removeItem("shiling_unsynced");
+      writeFailed = false;
+      applyServerState(serverState);
+      closeModal(true);
+      renderWithTransition();
+      showToast("已重新读取服务器会议。", "calendar-check-2");
+    } catch {
+      showToast("无法读取服务器，本机修改仍然保留。", "alert-circle");
+    }
+    return;
+  }
   if (!backendAvailable || meetingId === "local") {
     closeModal();
     return;
@@ -1528,7 +1578,7 @@ function openImportModal() {
       <div class="modal-head">
         <div>
           <h2 id="import-title">导入会议记录</h2>
-          <p>支持粘贴文本或导入 TXT、MD 文件，原始内容只保存在本机。</p>
+          <p>支持粘贴文本或导入 TXT、MD 文件；启用模型时内容会发送至配置的模型服务。</p>
         </div>
         <button class="modal-close" type="button" data-close-modal aria-label="关闭">${icon("x")}</button>
       </div>
@@ -1622,6 +1672,13 @@ function openTaskEditor(taskId = "", defaultStatus = "todo") {
               <textarea id="task-notes" name="notes" placeholder="验收标准、依赖或补充信息">${escapeHTML(editing.notes || "")}</textarea>
             </div>
             ${editing.source ? `<div class="field full"><span class="field-label">会议依据</span><p class="entry-source">${escapeHTML(editing.source)}</p></div>` : ""}
+            ${isEdit ? `<div class="field full" id="task-comments" data-task-id="${escapeHTML(editing.id)}">
+              <span class="field-label">任务评论</span>
+              <div id="comment-list" aria-live="polite">${backendAvailable ? "正在加载评论…" : "连接后端后可查看评论。"}</div>
+              ${backendAvailable ? `<input id="comment-author" type="text" maxlength="30" placeholder="你的名字（可选）" aria-label="评论作者">
+              <textarea id="comment-body" maxlength="2000" placeholder="添加跟进进展或问题" aria-label="评论内容"></textarea>
+              <button class="secondary-button" id="submit-comment" type="button">发表评论</button>` : ""}
+            </div>` : ""}
           </div>
         </div>
         <div class="modal-foot">
@@ -1636,7 +1693,43 @@ function openTaskEditor(taskId = "", defaultStatus = "todo") {
       </form>
     </div>
   `);
+  if (isEdit && backendAvailable) loadTaskComments(editing.id);
   setTimeout(() => document.getElementById("task-title")?.focus(), 50);
+}
+
+async function loadTaskComments(taskId) {
+  const panel = document.getElementById("task-comments");
+  try {
+    const payload = await apiRequest(`/tasks/${encodeURIComponent(taskId)}/comments`);
+    if (!panel?.isConnected) return;
+    const list = panel.querySelector("#comment-list");
+    list.innerHTML = payload.comments.length
+      ? payload.comments.map((comment) => `<div class="task-comment"><strong>${escapeHTML(comment.author)}</strong> <small>${escapeHTML(comment.created_at)}</small><p>${escapeHTML(comment.body)}</p></div>`).join("")
+      : '<p class="panel-subtitle">暂无评论。</p>';
+  } catch {
+    if (panel?.isConnected) panel.querySelector("#comment-list").textContent = "评论加载失败，请重新打开任务重试。";
+  }
+}
+
+async function submitTaskComment(button) {
+  const panel = button.closest("#task-comments");
+  const body = panel.querySelector("#comment-body");
+  const text = body.value.trim();
+  if (!text) return showToast("请输入评论内容。", "alert-circle");
+  button.disabled = true;
+  try {
+    await apiRequest(`/tasks/${encodeURIComponent(panel.dataset.taskId)}/comments`, {
+      method: "POST", body: { author: panel.querySelector("#comment-author").value.trim(), body: text },
+    });
+    if (!panel.isConnected) return;
+    body.value = "";
+    await loadTaskComments(panel.dataset.taskId);
+    showToast("评论已保存。", "check-circle-2");
+  } catch {
+    if (panel.isConnected) showToast("评论保存失败，请重试。", "alert-circle");
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function openModal(innerHtml) {
@@ -1668,6 +1761,10 @@ function closeModal(immediate = false) {
 }
 
 async function runExtraction() {
+  if (localStorage.getItem("shiling_unsynced") === "1") {
+    showToast("有未同步的本机修改，请先导出 JSON 备份。", "alert-circle");
+    return;
+  }
   const input = document.getElementById("meeting-input");
   const text = input?.value.trim() || "";
   if (text.length < 30) {
@@ -1708,7 +1805,8 @@ async function runExtraction() {
     serverRequest = apiRequest("/meetings/extract", {
       method: "POST",
       body: { transcript: text },
-    });
+      timeout: 60000,
+    }).then((payload) => ({ payload }), (error) => ({ error }));
   }
 
   for (let index = 0; index < steps.length; index += 1) {
@@ -1724,12 +1822,15 @@ async function runExtraction() {
   let usedBackend = false;
   if (serverRequest) {
     try {
-      const payload = await serverRequest;
+      const { payload, error } = await serverRequest;
+      if (error) throw error;
       applyServerState(payload.state);
       result = { tasks: state.tasks, risks: state.risks };
       usedBackend = true;
     } catch {
-      result = extractMeeting(text);
+      closeModal(true);
+      showToast("提取请求未完成，请检查会议列表后再重试。", "alert-circle");
+      return;
     }
   } else {
     result = extractMeeting(text);
@@ -1740,6 +1841,7 @@ async function runExtraction() {
     state.tasks = result.tasks;
     state.decisions = result.decisions;
     state.risks = result.risks;
+    trackWrite(null);
   }
   state.ownerFilter = "all";
   state.query = "";
@@ -2147,6 +2249,12 @@ function handleClick(event) {
     return;
   }
 
+  const commentButton = event.target.closest("#submit-comment");
+  if (commentButton) {
+    submitTaskComment(commentButton);
+    return;
+  }
+
   if (event.target.closest("[data-save-task]")) {
     saveTaskFromForm();
     return;
@@ -2178,18 +2286,27 @@ function handleClick(event) {
   }
 
   if (event.target.closest("#reset-demo-btn")) {
-    if (window.confirm("恢复初始演示数据？当前调整会被覆盖。")) {
+    if (pendingWrites) {
+      showToast("正在保存修改，请稍后再试。", "alert-circle");
+      return;
+    }
+    if (localStorage.getItem("shiling_unsynced") === "1") {
+      if (!window.confirm("当前有未同步的本机修改。请先导出 JSON 备份。确定放弃这些本机修改并恢复演示数据吗？")) return;
+    }
+    if (window.confirm("创建一份新的演示会议？原有服务器会议会保留。")) {
+      localStorage.removeItem("shiling_unsynced");
+      writeFailed = false;
       state = createDemoState();
       saveState();
       renderWithTransition();
       showToast("已恢复演示数据。", "rotate-ccw");
-      if (backendAvailable) {
+      if (["http:", "https:"].includes(window.location.protocol)) {
         apiRequest("/reset", { method: "POST" })
           .then((payload) => {
             applyServerState(payload.state);
             renderWithTransition();
           })
-          .catch(() => updateChrome());
+          .catch(() => { trackWrite(null); updateChrome(); });
       }
     }
     return;
@@ -2211,6 +2328,7 @@ function handleClick(event) {
 }
 
 function saveTaskFromForm() {
+  if (pendingWrites) return showToast("正在保存上一项修改，请稍后再试。", "alert-circle");
   const form = document.getElementById("task-form");
   if (!form) return;
   const formData = new FormData(form);
@@ -2221,6 +2339,7 @@ function saveTaskFromForm() {
   const existing = state.tasks.find((task) => task.id === id);
   const task = {
     id: existing?.id || `t-${Date.now()}`,
+    version: existing?.version,
     title,
     owner: String(formData.get("owner") || "").trim(),
     due: normalizeDate(String(formData.get("due") || "")),
@@ -2244,6 +2363,7 @@ function saveTaskFromForm() {
 }
 
 function convertToTask(type, id) {
+  if (pendingWrites) return showToast("正在保存上一项修改，请稍后再试。", "alert-circle");
   let task;
   if (type === "risk") {
     const risk = state.risks.find((item) => item.id === id);
@@ -2285,12 +2405,13 @@ function convertToTask(type, id) {
 function handleDeleteTask(event) {
   const button = event.target.closest("[data-delete-task]");
   if (!button) return;
+  if (pendingWrites) return showToast("正在保存上一项修改，请稍后再试。", "alert-circle");
   const id = button.dataset.deleteTask;
   const task = state.tasks.find((item) => item.id === id);
   if (!task) return;
   if (!window.confirm(`删除“${task.title}”？`)) return;
   state.tasks = state.tasks.filter((item) => item.id !== id);
-  syncDelete(id);
+  syncDelete(task);
   saveState();
   closeModal(true);
   renderWithTransition();
@@ -2385,6 +2506,7 @@ function handleDrop(event) {
   const column = event.target.closest(".board-column");
   if (!column) return;
   event.preventDefault();
+  if (pendingWrites) return showToast("正在保存上一项修改，请稍后再试。", "alert-circle");
   const taskId = event.dataTransfer.getData("text/plain") || draggingTaskId;
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task) return;

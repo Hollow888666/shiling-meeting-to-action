@@ -10,7 +10,7 @@ if str(ROOT) not in sys.path:
 
 from backend.extraction import extract_meeting
 from backend.seed import SAMPLE_TRANSCRIPT
-from backend.store import Database
+from backend.store import ConflictError, Database
 
 
 def main():
@@ -52,12 +52,31 @@ def main():
         assert created["id"]
         updated = database.update_task(created["id"], {"status": "done"})
         assert updated["status"] == "done"
+        assert updated["version"] == 2
+        try:
+            database.update_task(created["id"], {"status": "todo", "version": 1})
+            raise AssertionError("Stale update was accepted")
+        except ConflictError:
+            pass
+        try:
+            database.delete_task(created["id"], version=1)
+            raise AssertionError("Stale deletion was accepted")
+        except ConflictError:
+            pass
+        for invalid in ({"status": "invalid"}, {"due": "2026-99-01"}, {"title": ""}):
+            try:
+                database.update_task(created["id"], invalid)
+                raise AssertionError(f"Accepted invalid task: {invalid}")
+            except ValueError:
+                pass
         database.delete_task(created["id"])
         assert len(database.get_state()["tasks"]) == 5
 
         extracted_state = database.replace_state(extracted, preserve_history=True)
         assert len(extracted_state["tasks"]) == 4
         assert len(database.list_meetings()["meetings"]) == 2
+        database.reset_demo()
+        assert len(database.list_meetings()["meetings"]) == 3
 
     print("backend_core_test=passed")
 

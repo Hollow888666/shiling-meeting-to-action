@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 
 from playwright.sync_api import expect, sync_playwright
 
@@ -9,10 +10,11 @@ SCREENSHOT = ROOT / "screenshots" / "mobile-standalone.png"
 
 
 def main():
+    SCREENSHOT.parent.mkdir(exist_ok=True)
     errors = []
     requests = []
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(channel="msedge", headless=True)
+        browser = playwright.chromium.launch(channel="msedge" if sys.platform == "win32" else None, headless=True)
         page = browser.new_page(viewport={"width": 390, "height": 844})
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.on(

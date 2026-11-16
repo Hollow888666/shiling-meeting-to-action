@@ -186,6 +186,25 @@ def main():
         )
         assert extracted["state"]["tasks"]
         assert len(request("/api/meetings")["meetings"]) >= 2
+        first_id = state["meeting"]["id"]
+        second_id = extracted["state"]["meeting"]["id"]
+        request(f"/api/meetings/{first_id}/activate", "POST", {})
+        assert request(f"/api/state?meetingId={second_id}")["meeting"]["id"] == second_id
+        task = request("/api/tasks", "POST", {"title": "隔离测试", "meetingId": first_id})["task"]
+        assert any(item["id"] == task["id"] for item in request(f"/api/state?meetingId={first_id}")["tasks"])
+        assert all(item["id"] != task["id"] for item in request(f"/api/state?meetingId={second_id}")["tasks"])
+        task_path = f"/api/tasks/{task['id']}"
+        updated = request(task_path, "PUT", {"title": "先保存的修改", "version": task["version"]})["task"]
+        assert updated["version"] == task["version"] + 1
+        try:
+            request(task_path, "PUT", {"title": "过期修改", "version": task["version"]})
+            raise AssertionError("Stale update was accepted")
+        except urllib.error.HTTPError as error:
+            assert error.code == 409
+        assert any(item["title"] == "先保存的修改" for item in request(f"/api/state?meetingId={first_id}")["tasks"])
+        before = len(request("/api/meetings")["meetings"])
+        request("/api/reset", "POST", {})
+        assert len(request("/api/meetings")["meetings"]) == before + 1
         print("backend_api_test=passed")
     finally:
         try:

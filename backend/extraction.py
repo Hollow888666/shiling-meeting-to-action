@@ -48,11 +48,18 @@ def normalize_date(value: str | None) -> str:
 def parse_meeting_date(text: str, current_year: int) -> str:
     full = re.search(r"(20\d{2})年(\d{1,2})月(\d{1,2})日", text)
     if full:
-        return f"{full.group(1)}-{int(full.group(2)):02d}-{int(full.group(3)):02d}"
+        return safe_date(int(full.group(1)), int(full.group(2)), int(full.group(3)))
     month_day = re.search(r"(\d{1,2})月(\d{1,2})日", text)
     if month_day:
-        return f"{current_year}-{int(month_day.group(1)):02d}-{int(month_day.group(2)):02d}"
+        return safe_date(current_year, int(month_day.group(1)), int(month_day.group(2)))
     return ""
+
+
+def safe_date(year: int, month: int, day: int) -> str:
+    try:
+        return date(year, month, day).isoformat()
+    except ValueError:
+        return ""
 
 
 def clean_sentence(text: str) -> str:
@@ -166,17 +173,17 @@ def extract_owner(text: str, speaker: str, participants: list[str]) -> str:
 def extract_due_date(text: str, meeting_date: str) -> str:
     full = re.search(r"(20\d{2})年?(\d{1,2})月(\d{1,2})日?", text)
     if full:
-        return f"{full.group(1)}-{int(full.group(2)):02d}-{int(full.group(3)):02d}"
+        return safe_date(int(full.group(1)), int(full.group(2)), int(full.group(3)))
 
     month_day = re.search(r"(\d{1,2})月(\d{1,2})日", text)
     if month_day:
         year = meeting_date[:4]
-        return f"{year}-{int(month_day.group(1)):02d}-{int(month_day.group(2)):02d}"
+        return safe_date(int(year), int(month_day.group(1)), int(month_day.group(2))) if year.isdigit() else ""
 
     slash = re.search(r"(?<!\d)(\d{1,2})/(\d{1,2})(?!\d)", text)
     if slash:
         year = meeting_date[:4]
-        return f"{year}-{int(slash.group(1)):02d}-{int(slash.group(2)):02d}"
+        return safe_date(int(year), int(slash.group(1)), int(slash.group(2))) if year.isdigit() else ""
 
     try:
         base = date.fromisoformat(meeting_date)

@@ -8,6 +8,7 @@
 | --- | --- | --- |
 | `PORT` | 否 | 云平台自动注入的监听端口 |
 | `SHILING_PORT` | 否 | 自定义端口，优先级高于 `PORT` |
+| `SHILING_DB_PATH` | 否 | SQLite 数据文件路径，默认 `data/shiling.db` |
 | `SHILING_ACCESS_CODE` | 公网必填 | 公网访问码 |
 | `SHILING_LLM_BASE_URL` | 否 | OpenAI Chat Completions 兼容地址，例如 `https://provider/v1` |
 | `SHILING_LLM_MODEL` | 否 | 模型名称 |
