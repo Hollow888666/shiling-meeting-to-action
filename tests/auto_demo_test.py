@@ -63,7 +63,10 @@ def main():
         wait_for_server()
         request("/api/reset", "POST", {})
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(channel="msedge", headless=True)
+            browser = playwright.chromium.launch(
+                channel="msedge" if sys.platform == "win32" else None,
+                headless=True,
+            )
             page = browser.new_page(viewport={"width": 1440, "height": 1000})
             page.on("pageerror", lambda error: errors.append(str(error)))
             page.on(

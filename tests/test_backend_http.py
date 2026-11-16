@@ -117,6 +117,48 @@ class HttpTests(unittest.TestCase):
             self.assertEqual(self.request(f"/api/{endpoint}?meetingId=missing")[0], 404)
         self.assertEqual(self.request(f"/api/tasks/{task['id']}/comments", "POST", {"body": "a" * 2001})[0], 400)
 
+    def test_auto_meeting_isolation_and_relative_dates(self):
+        status, payload = self.request(
+            "/api/meetings/compose",
+            "POST",
+            {
+                "title": "第一场会议",
+                "date": "2025-01-10",
+                "participants": ["李雷"],
+                "manualText": "李雷：我明天负责完成项目测试，并整理验收结果。",
+            },
+        )
+        self.assertEqual(status, 201)
+        first = payload["state"]["meeting"]["id"]
+        self.assertEqual(payload["state"]["tasks"][0]["due"], "2025-01-11")
+
+        second = self.request("/api/reset", "POST", {})[1]["state"]["meeting"]["id"]
+        self.request(f"/api/meetings/{first}/activate", "POST", {})
+        completeness = self.request(
+            f"/api/meetings/completeness?meetingId={first}"
+        )[1]
+        self.assertEqual(completeness["state"]["meeting"]["id"], first)
+
+        document = self.request(
+            f"/api/meetings/final-document?meetingId={first}"
+        )[1]["document"]
+        self.assertIn("第一场会议", document)
+        updated = self.request(
+            f"/api/meetings/current?meetingId={first}",
+            "PUT",
+            {"title": "修改第一场"},
+        )
+        self.assertEqual(updated[1]["state"]["meeting"]["id"], first)
+        self.assertNotEqual(
+            self.request(f"/api/state?meetingId={second}")[1]["meeting"]["title"],
+            "修改第一场",
+        )
+        for path in ("completeness", "final-document"):
+            self.assertEqual(
+                self.request(f"/api/meetings/{path}?meetingId=missing")[0],
+                404,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

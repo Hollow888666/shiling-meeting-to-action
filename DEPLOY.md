@@ -1,6 +1,6 @@
 # 公网部署
 
-项目使用 Python 标准库和 SQLite，不需要安装第三方 Python 包。
+项目使用 SQLite 和 Python 第三方依赖。启动前执行 `pip install -r requirements.txt`；录音转写可使用配置的 OpenAI API 或本地 faster-whisper。
 
 ## 环境变量
 

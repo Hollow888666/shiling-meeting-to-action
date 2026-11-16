@@ -322,6 +322,13 @@ async function apiUpload(path, formData, timeoutMs = 200000) {
 
 function applyServerState(serverState) {
   if (!serverState?.meeting || !Array.isArray(serverState.tasks)) return;
+  if (
+    state.meeting?.id &&
+    serverState.meeting.id !== state.meeting.id &&
+    autoMode.phase !== "processing"
+  ) {
+    autoMode = createAutoModeState();
+  }
   const preferences = {
     view: state.view,
     query: state.query,
@@ -1393,6 +1400,7 @@ async function processAutoMaterials() {
     const participants = parseParticipantNames(autoMode.participantsText);
     const payload = await apiRequest("/meetings/compose", {
       method: "POST",
+      timeout: 90000,
       body: {
         title: autoMode.title,
         date: autoMode.date,
@@ -1422,13 +1430,19 @@ async function processAutoMaterials() {
     autoMode.errors.push(error.message || "AI 处理失败。");
     autoMode.phase = "input";
     renderWithTransition();
-    showToast("AI 处理中断，请检查后端或材料格式。", "alert-circle");
+    showToast(
+      error.name === "AbortError"
+        ? "请求超时，请先检查会议列表再重试。"
+        : "AI 处理中断，请检查后端或材料格式。",
+      "alert-circle",
+    );
   }
 }
 
 async function resolveAutoMissing() {
   const meetingPayload = {};
   const taskPayloads = {};
+  const taskVersions = new Map(state.tasks.map((task) => [task.id, task.version]));
   for (const [id, value] of Object.entries(autoMode.resolutions)) {
     const [entityType, entityId, field] = id.split(":");
     if (!value) continue;
@@ -1446,19 +1460,30 @@ async function resolveAutoMissing() {
 
   try {
     if (Object.keys(meetingPayload).length) {
-      const result = await apiRequest("/meetings/current", {
-        method: "PUT",
-        body: meetingPayload,
-      });
+      const result = await apiRequest(
+        `/meetings/current?meetingId=${encodeURIComponent(state.meeting.id)}`,
+        {
+          method: "PUT",
+          body: meetingPayload,
+        },
+      );
       applyServerState(result.state);
     }
     for (const [taskId, payload] of Object.entries(taskPayloads)) {
-      await apiRequest(`/tasks/${encodeURIComponent(taskId)}`, {
+      const task = state.tasks.find((item) => item.id === taskId);
+      const version = taskVersions.get(taskId);
+      if (!task || !Number.isInteger(version)) {
+        throw new Error("任务版本不可用，请重新加载会议。");
+      }
+      const updated = await apiRequest(`/tasks/${encodeURIComponent(taskId)}`, {
         method: "PUT",
-        body: payload,
+        body: { ...payload, version },
       });
+      task.version = updated.task.version;
     }
-    const result = await apiRequest("/meetings/completeness");
+    const result = await apiRequest(
+      `/meetings/completeness?meetingId=${encodeURIComponent(state.meeting.id)}`,
+    );
     applyServerState(result.state);
     autoMode.completeness = result.completeness;
     autoMode.resolutions = {};
@@ -1469,13 +1494,20 @@ async function resolveAutoMissing() {
       result.completeness.ready ? "badge-check" : "circle-alert",
     );
   } catch (error) {
-    showToast(`缺失项保存失败：${error.message}`, "alert-circle");
+    showToast(
+      error.status === 409
+        ? "任务已被修改，请重新读取会议后再补充。"
+        : `缺失项保存失败：${error.message}`,
+      "alert-circle",
+    );
   }
 }
 
 async function loadFinalDocument() {
   try {
-    const result = await apiRequest("/meetings/final-document");
+    const result = await apiRequest(
+      `/meetings/final-document?meetingId=${encodeURIComponent(state.meeting.id)}`,
+    );
     autoMode.completeness = result.completeness;
     autoMode.finalDocument = result.document;
     autoMode.phase = "final";

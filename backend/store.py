@@ -307,8 +307,12 @@ class Database:
             )
         return self.get_state(meeting_id)
 
-    def update_meeting(self, payload: dict[str, Any]) -> dict[str, Any]:
-        meeting_id = self.current_meeting_id()
+    def update_meeting(
+        self,
+        payload: dict[str, Any],
+        meeting_id: str | None = None,
+    ) -> dict[str, Any]:
+        meeting_id = meeting_id or self.current_meeting_id()
         with self.connection() as connection:
             row = connection.execute(
                 "SELECT * FROM meetings WHERE id = ?", (meeting_id,)

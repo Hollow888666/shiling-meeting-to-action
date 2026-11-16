@@ -39,3 +39,6 @@ jobs:
           python tests/smoke_test.py
           python tests/backend_ui_test.py
           python tests/standalone_check.py
+          python tests/auto_mode_test.py
+          python tests/auto_missing_test.py
+          python tests/auto_demo_test.py

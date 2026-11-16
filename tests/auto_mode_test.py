@@ -76,7 +76,10 @@ def main():
 林晓：上线回滚能力还存在风险，必须在上线前验证。
 """
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(channel="msedge", headless=True)
+            browser = playwright.chromium.launch(
+                channel="msedge" if sys.platform == "win32" else None,
+                headless=True,
+            )
             page = browser.new_page(viewport={"width": 1440, "height": 1000})
             page.on("pageerror", lambda error: errors.append(str(error)))
             page.on(
@@ -104,6 +107,13 @@ def main():
             )
             page.wait_for_timeout(400)
             expect(page.locator(".auto-view button")).to_have_count(2)
+
+            def delay_compose(route):
+                response = route.fetch()
+                time.sleep(7)
+                route.fulfill(response=response)
+
+            page.route("**/api/meetings/compose", delay_compose)
             page.locator(".auto-primary").click()
             expect(page.locator(".auto-primary")).to_have_text(
                 "生成最终文档", timeout=30000

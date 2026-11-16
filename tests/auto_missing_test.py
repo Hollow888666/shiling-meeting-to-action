@@ -63,7 +63,10 @@ def main():
 陈晨：上线回滚能力还存在风险。
 """
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(channel="msedge", headless=True)
+            browser = playwright.chromium.launch(
+                channel="msedge" if sys.platform == "win32" else None,
+                headless=True,
+            )
             page = browser.new_page(viewport={"width": 1440, "height": 1000})
             page.goto(BASE, wait_until="load")
             page.evaluate("localStorage.clear()")
@@ -93,6 +96,11 @@ def main():
             )
             completeness = request("/api/meetings/completeness")["completeness"]
             assert completeness["ready"] is True
+            page.locator("#meeting-switcher").click()
+            expect(page.locator(".meeting-option").nth(1)).to_be_visible()
+            page.locator(".meeting-option").nth(1).click()
+            expect(page.locator("#auto-manual-text")).to_be_visible()
+            expect(page.locator(".auto-primary")).to_have_text("开始 AI 处理")
             browser.close()
         print("auto_missing_test=passed")
     finally:

@@ -46,6 +46,9 @@ def normalize_date(value: str | None) -> str:
 
 
 def parse_meeting_date(text: str, current_year: int) -> str:
+    iso = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", text)
+    if iso:
+        return safe_date(int(iso.group(1)), int(iso.group(2)), int(iso.group(3)))
     full = re.search(r"(20\d{2})年(\d{1,2})月(\d{1,2})日", text)
     if full:
         return safe_date(int(full.group(1)), int(full.group(2)), int(full.group(3)))

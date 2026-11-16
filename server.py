@@ -218,7 +218,11 @@ class ShilingHandler(BaseHTTPRequestHandler):
             self._json(HTTPStatus.OK, {"material": get_auto_demo_material()})
             return
         if path == "/api/meetings/completeness":
-            state = DATABASE.get_state()
+            try:
+                state = DATABASE.get_state(meeting_id)
+            except KeyError as error:
+                self._handle_error(error)
+                return
             self._json(
                 HTTPStatus.OK,
                 {
@@ -228,7 +232,11 @@ class ShilingHandler(BaseHTTPRequestHandler):
             )
             return
         if path == "/api/meetings/final-document":
-            state = DATABASE.get_state()
+            try:
+                state = DATABASE.get_state(meeting_id)
+            except KeyError as error:
+                self._handle_error(error)
+                return
             completeness = analyze_completeness(state)
             self._json(
                 HTTPStatus.OK,
@@ -447,7 +455,8 @@ class ShilingHandler(BaseHTTPRequestHandler):
             self._handle_error(error)
 
     def do_PUT(self) -> None:
-        path = urlparse(self.path).path
+        parsed = urlparse(self.path)
+        path = parsed.path
         if not self._authorized(api=True):
             return
         try:
@@ -458,7 +467,8 @@ class ShilingHandler(BaseHTTPRequestHandler):
                 self._json(HTTPStatus.OK, {"task": task})
                 return
             if path == "/api/meetings/current":
-                state = DATABASE.update_meeting(self._read_json())
+                meeting_id = (parse_qs(parsed.query).get("meetingId") or [None])[0]
+                state = DATABASE.update_meeting(self._read_json(), meeting_id)
                 self._json(
                     HTTPStatus.OK,
                     {
