@@ -103,7 +103,7 @@ def main():
                 }
             )
             page.wait_for_timeout(400)
-            expect(page.locator(".auto-view button")).to_have_count(1)
+            expect(page.locator(".auto-view button")).to_have_count(2)
             page.locator(".auto-primary").click()
             expect(page.locator(".auto-primary")).to_have_text(
                 "生成最终文档", timeout=30000

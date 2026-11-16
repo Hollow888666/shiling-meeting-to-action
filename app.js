@@ -1086,7 +1086,13 @@ function renderAutoMain(requiredMissing) {
         <span class="auto-kicker">INPUT MATERIALS</span>
         <h2>投入会议材料</h2>
       </div>
-      <span class="auto-score">${autoMode.files.length} 个文件</span>
+      <div class="auto-section-tools">
+        <span class="auto-score">${autoMode.files.length} 个文件</span>
+        <button class="ghost-button auto-demo-button" type="button" data-action="load-auto-demo">
+          ${icon("file-plus-2")}
+          载入演示文件
+        </button>
+      </div>
     </div>
     <label class="auto-dropzone" id="auto-dropzone">
       <input id="auto-files" type="file" multiple accept=".txt,.md,.csv,.json,.pdf,.docx,.pptx,audio/*,.mp3,.wav,.m4a,.webm,.ogg,.aac,.flac">
@@ -1258,6 +1264,42 @@ function addAutoFiles(fileList) {
     }
   }
   renderWithTransition();
+}
+
+async function loadAutoDemoMaterial() {
+  if (autoMode.phase !== "input") return;
+  if (!backendAvailable) {
+    showToast("演示文件需要后端服务。", "server-off");
+    return;
+  }
+
+  try {
+    const payload = await apiRequest("/demo/auto-material", { timeout: 8000 });
+    const demo = payload.material;
+    if (!demo?.filename || typeof demo.content !== "string" || !demo.content.trim()) {
+      throw new Error("演示材料格式无效。");
+    }
+
+    const file = new File(
+      [demo.content],
+      demo.filename,
+      {
+        type: demo.mimeType || "text/plain;charset=utf-8",
+        lastModified: Date.now(),
+      },
+    );
+    if (!autoMode.title.trim() && demo.suggestedTitle) {
+      autoMode.title = demo.suggestedTitle;
+    }
+    if (!autoMode.date && demo.suggestedDate) autoMode.date = demo.suggestedDate;
+    if (!autoMode.participantsText.trim() && Array.isArray(demo.suggestedParticipants)) {
+      autoMode.participantsText = demo.suggestedParticipants.join("、");
+    }
+    addAutoFiles([file]);
+    showToast("演示文件已载入。", "file-check-2");
+  } catch (error) {
+    showToast(`演示文件载入失败：${error.message}`, "server-off");
+  }
 }
 
 async function handleAutoPrimary() {
@@ -2235,6 +2277,7 @@ function handleClick(event) {
     }
     if (action === "copy-summary") copySummary();
     if (action === "export-md") exportMarkdown();
+    if (action === "load-auto-demo") loadAutoDemoMaterial();
     if (action === "auto-primary") handleAutoPrimary();
     if (action === "new-meeting") {
       closeModal(true);

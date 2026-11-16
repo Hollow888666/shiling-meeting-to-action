@@ -1760,6 +1760,27 @@ svg {
   font-size: 18px;
 }
 
+.auto-section-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.auto-demo-button {
+  border-color: var(--line);
+  background: var(--soft);
+  color: var(--blue);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.auto-demo-button:hover {
+  border-color: #b8c7f4;
+  background: var(--blue-soft);
+}
+
 .auto-score {
   display: inline-flex;
   align-items: center;
@@ -2991,6 +3012,15 @@ svg {
 }
 
 @media (max-width: 560px) {
+  .auto-section-head:has(.auto-section-tools) {
+    flex-wrap: wrap;
+  }
+
+  .auto-section-tools {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .topbar-actions .primary-button span {
     display: none;
   }

@@ -32,6 +32,8 @@
 3. 负责人或截止时间缺失时，在同一页面补齐。
 4. 生成 Markdown 最终文档，同时写入任务看板和 SQLite。
 
+没有现成材料时，可点击“载入演示文件”。演示材料会保留一个待分配负责人，适合现场补录任意虚构姓名并继续完整流程。
+
 ## 当前能力
 
 - 粘贴会议文本，或导入 TXT、MD 文件。
@@ -110,6 +112,7 @@ SQLite 数据文件默认位于 `data/shiling.db`。需要隔离测试、演示�
 | GET | `/api/meetings` | 获取会议历史 |
 | GET | `/api/meetings/completeness` | 检查当前会议完整性 |
 | GET | `/api/meetings/final-document` | 生成最终会议文档 |
+| GET | `/api/demo/auto-material` | 获取 AI 自动模式演示文件 |
 | GET | `/api/analytics` | 获取任务、负责人、逾期和风险统计 |
 | GET | `/api/activity?limit=50` | 获取审计日志 |
 | GET | `/api/search?q=知识库` | 服务端搜索任务、决策和风险 |
@@ -153,6 +156,7 @@ D:\Python\python.exe tests\standalone_check.py
 D:\Python\python.exe tests\backend_materials_test.py
 D:\Python\python.exe tests\auto_mode_test.py
 D:\Python\python.exe tests\auto_missing_test.py
+D:\Python\python.exe tests\auto_demo_test.py
 ```
 
 `smoke_test.py` 覆盖搜索、负责人筛选、编辑、新建、拖拽、风险转任务和报告导出。
@@ -170,6 +174,8 @@ D:\Python\python.exe tests\auto_missing_test.py
 `auto_mode_test.py` 验证单按钮自动模式从材料上传到最终文档生成。
 
 `auto_missing_test.py` 验证缺失负责人、截止时间等字段的补齐流程。
+
+`auto_demo_test.py` 验证一键载入演示文件、补录虚构负责人和生成最终文档。
 
 浏览器测试需要安装 Playwright；Windows 上使用已安装的 Microsoft Edge。Linux 可运行 `python -m playwright install chromium` 安装测试浏览器。GitHub Actions 会运行核心、接口和主要浏览器测试。
 

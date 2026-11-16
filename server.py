@@ -23,6 +23,7 @@ from backend.completeness import (
     build_final_document,
     compose_meeting_material,
 )
+from backend.demo_materials import get_auto_demo_material
 from backend.documents import extract_document
 from backend.llm import is_configured as llm_is_configured
 from backend.llm import try_extract_with_llm
@@ -46,6 +47,8 @@ if not DATABASE_PATH.is_absolute():
 DATABASE = Database(DATABASE_PATH)
 ACCESS_CODE = os.getenv("SHILING_ACCESS_CODE", "").strip()
 STARTED_AT = time.time()
+MAX_COMPOSE_ITEMS = 24
+MAX_COMPOSE_TEXT_CHARS = 200_000
 
 STATIC_EXTENSIONS = {
     ".html",
@@ -57,7 +60,90 @@ STATIC_EXTENSIONS = {
     ".svg",
     ".ico",
     ".webp",
+    ".txt",
 }
+
+
+def normalize_optional_text(value: object, field_name: str) -> str:
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be text.")
+    return value.strip()
+
+
+def normalize_participants(value: object) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError("participants must be a list.")
+    if len(value) > 24:
+        raise ValueError("participants contains too many entries.")
+    names = []
+    for item in value:
+        if not isinstance(item, str):
+            raise ValueError("participant names must be text.")
+        name = item.strip()
+        if name and name not in names:
+            names.append(name)
+    return names
+
+
+def normalize_text_sources(
+    value: object,
+    field_name: str,
+    *,
+    preserve_segments: bool,
+) -> list[dict]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} must be a list.")
+    if len(value) > MAX_COMPOSE_ITEMS:
+        raise ValueError(f"{field_name} contains too many entries.")
+
+    normalized = []
+    total_chars = 0
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError(f"{field_name} entries must be objects.")
+        text = normalize_optional_text(item.get("text"), f"{field_name}.text")
+        if not text:
+            continue
+        total_chars += len(text)
+        if total_chars > MAX_COMPOSE_TEXT_CHARS:
+            raise ValueError(f"{field_name} text is too large.")
+
+        record = {
+            "filename": normalize_optional_text(
+                item.get("filename"),
+                f"{field_name}.filename",
+            ),
+            "text": text,
+        }
+        if preserve_segments:
+            segments = item.get("segments")
+            if segments is not None and not isinstance(segments, list):
+                raise ValueError(f"{field_name}.segments must be a list.")
+            safe_segments = []
+            for segment in (segments or [])[:MAX_COMPOSE_ITEMS]:
+                if not isinstance(segment, dict):
+                    raise ValueError(f"{field_name}.segments entries must be objects.")
+                safe_segments.append(
+                    {
+                        "speaker": normalize_optional_text(
+                            segment.get("speaker"),
+                            f"{field_name}.segments.speaker",
+                        ),
+                        "text": normalize_optional_text(
+                            segment.get("text"),
+                            f"{field_name}.segments.text",
+                        ),
+                    }
+                )
+            record["segments"] = safe_segments
+        normalized.append(record)
+    return normalized
 
 
 class ShilingHandler(BaseHTTPRequestHandler):
@@ -112,6 +198,7 @@ class ShilingHandler(BaseHTTPRequestHandler):
                         "meeting-completeness",
                         "final-document",
                         "guided-auto-mode",
+                        "ai-auto-demo-material",
                     ],
                     "transcriptionConfigured": transcription_is_configured(),
                     "transcriptionEngine": transcription_engine(),
@@ -126,6 +213,9 @@ class ShilingHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/meetings":
             self._json(HTTPStatus.OK, DATABASE.list_meetings())
+            return
+        if path == "/api/demo/auto-material":
+            self._json(HTTPStatus.OK, {"material": get_auto_demo_material()})
             return
         if path == "/api/meetings/completeness":
             state = DATABASE.get_state()
@@ -269,19 +359,29 @@ class ShilingHandler(BaseHTTPRequestHandler):
                 self._json(HTTPStatus.CREATED, {"task": task})
                 return
             if path == "/api/meetings/compose":
-                documents = payload.get("documents") or []
-                audio_transcripts = payload.get("audioTranscripts") or []
-                if not documents and not audio_transcripts and not str(
-                    payload.get("manualText") or ""
-                ).strip():
+                documents = normalize_text_sources(
+                    payload.get("documents"),
+                    "documents",
+                    preserve_segments=False,
+                )
+                audio_transcripts = normalize_text_sources(
+                    payload.get("audioTranscripts"),
+                    "audioTranscripts",
+                    preserve_segments=True,
+                )
+                manual_text = normalize_optional_text(
+                    payload.get("manualText"),
+                    "manualText",
+                )
+                if not documents and not audio_transcripts and not manual_text:
                     raise ValueError("请至少提供会议文档、录音转写或人工记录。")
                 transcript = compose_meeting_material(
-                    title=str(payload.get("title") or ""),
-                    meeting_date=str(payload.get("date") or ""),
-                    participants=payload.get("participants") or [],
+                    title=normalize_optional_text(payload.get("title"), "title"),
+                    meeting_date=normalize_optional_text(payload.get("date"), "date"),
+                    participants=normalize_participants(payload.get("participants")),
                     documents=documents,
                     audio_transcripts=audio_transcripts,
-                    manual_text=str(payload.get("manualText") or ""),
+                    manual_text=manual_text,
                 )
                 local_extracted = extract_meeting(transcript)
                 extracted = (
@@ -289,17 +389,18 @@ class ShilingHandler(BaseHTTPRequestHandler):
                     or local_extracted
                 )
                 extracted["meeting"]["title"] = (
-                    str(payload.get("title") or "").strip()
+                    normalize_optional_text(payload.get("title"), "title")
                     or extracted["meeting"]["title"]
                 )
                 if payload.get("date"):
-                    extracted["meeting"]["date"] = str(payload["date"])
+                    extracted["meeting"]["date"] = normalize_optional_text(
+                        payload.get("date"),
+                        "date",
+                    )
                 if payload.get("participants"):
-                    extracted["meeting"]["participants"] = [
-                        str(name).strip()
-                        for name in payload["participants"]
-                        if str(name).strip()
-                    ]
+                    extracted["meeting"]["participants"] = normalize_participants(
+                        payload.get("participants")
+                    )
                 extracted["meeting"]["transcript"] = transcript
                 state = DATABASE.replace_state(extracted, preserve_history=True)
                 self._json(
@@ -315,7 +416,7 @@ class ShilingHandler(BaseHTTPRequestHandler):
                         "sourceStats": {
                             "documents": len(documents),
                             "audio": len(audio_transcripts),
-                            "manualText": bool(str(payload.get("manualText") or "").strip()),
+                            "manualText": bool(manual_text),
                         },
                     },
                 )

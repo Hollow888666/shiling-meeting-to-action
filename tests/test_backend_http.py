@@ -57,6 +57,10 @@ class HttpTests(unittest.TestCase):
 
     def test_authentication_and_missing_resources(self):
         self.assertEqual(self.request("/api/state", authorized=False)[0], 401)
+        status, payload = self.request("/api/demo/auto-material")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["material"]["id"], "ai-auto-missing-owner")
+        self.assertTrue(payload["material"]["content"].startswith("客户交付验收评审会"))
         for path in ("/api/state?meetingId=missing", "/api/tasks/missing/comments", "/api/not-found"):
             with self.subTest(path=path):
                 self.assertEqual(self.request(path)[0], 404)
@@ -68,6 +72,18 @@ class HttpTests(unittest.TestCase):
                 self.assertEqual(self.request("/api/tasks", "POST", body)[0], 400)
         self.assertEqual(self.request("/api/meetings/extract", "POST", {"transcript": "太短"})[0], 400)
         self.assertEqual(self.request("/api/meetings/extract", "POST", {"transcript": ["x"] * 40})[0], 400)
+        for body in (
+            {"documents": "not-a-list"},
+            {"documents": [{"text": 42}]},
+            {"documents": [{"text": "x" * 200_001}]},
+            {"audioTranscripts": "not-a-list"},
+            {"manualText": "会议记录", "participants": "陈晨"},
+        ):
+            with self.subTest(compose_body=body):
+                self.assertEqual(
+                    self.request("/api/meetings/compose", "POST", body)[0],
+                    400,
+                )
 
     def test_concurrent_version_conflicts_and_comment_deletion(self):
         status, payload = self.request("/api/tasks", "POST", {"title": "接口测试"})

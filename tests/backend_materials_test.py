@@ -13,7 +13,9 @@ from backend.completeness import (
     build_final_document,
     compose_meeting_material,
 )
+from backend.demo_materials import get_auto_demo_material
 from backend.documents import extract_document
+from backend.extraction import extract_meeting
 
 
 def main():
@@ -89,6 +91,19 @@ def main():
     assert "# 产品评审会议" in final_document
     assert "## 行动项" in final_document
     assert "完整性检查" in final_document
+
+    demo = get_auto_demo_material()
+    demo_state = extract_meeting(demo["content"])
+    demo_completeness = analyze_completeness(demo_state)
+    required = [
+        entry
+        for entry in demo_completeness["missing"]
+        if entry["severity"] == "required"
+    ]
+    assert demo_state["meeting"]["title"] == "客户交付验收评审会"
+    assert len(demo_state["tasks"]) == 3
+    assert len(required) == 1
+    assert required[0]["field"] == "owner"
     print("backend_materials_test=passed")
 
 
